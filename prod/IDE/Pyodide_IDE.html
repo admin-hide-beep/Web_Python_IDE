@@ -5,7 +5,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pyodide_IDE(v1.11.038)</title>
+    <title>Pyodide_IDE(v1.12.000)</title>
     <link rel="icon" type="image/png" href="favicon.png">
 
     <meta http-equiv="Content-Security-Policy" content="
@@ -13,7 +13,7 @@
 		script-src 'self' https://script.google.com 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com;
         style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net;
 		font-src 'self' https://cdnjs.cloudflare.com;
-		connect-src 'self' https://script.google.com https://script.googleusercontent.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://pypi.org https://files.pythonhosted.org;
+		connect-src 'self' https://script.google.com https://script.googleusercontent.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://pypi.org https://files.pythonhosted.org https://api.github.com;
 		frame-src 'self' blob: data:;
 		img-src 'self' data: blob:;
 		worker-src 'self' blob:;
@@ -194,11 +194,139 @@
             padding: 2px 3px;
             /* 内部パディング (上下2px, 左右3px) */
         }
+
+        /* ### GitHub 連携モーダル ### */
+        #github_modal_overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.55);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #github_modal_overlay.github_modal_visible {
+            display: flex;
+        }
+
+        #github_modal {
+            width: min(480px, 92vw);
+            max-height: 80vh;
+            overflow: auto;
+            background: #2d2d2d;
+            border: 1px solid #555;
+            border-radius: 8px;
+            padding: 16px 18px;
+            color: #ddd;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+            font-size: 13px;
+        }
+
+        #github_modal h2 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            color: #fff;
+        }
+
+        #github_modal .github_modal_row {
+            margin: 8px 0;
+        }
+
+        #github_modal label {
+            display: block;
+            margin-bottom: 4px;
+            color: #aaa;
+            font-size: 12px;
+        }
+
+        #github_modal select,
+        #github_modal input[type="text"] {
+            width: 100%;
+            box-sizing: border-box;
+            background: #1e1e1e;
+            color: #eee;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 6px 8px;
+        }
+
+        #github_modal .github_modal_actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 14px;
+        }
+
+        #github_modal .github_modal_actions button {
+            background: #3a3a3a;
+            color: #eee;
+            border: 1px solid #666;
+            border-radius: 4px;
+            padding: 6px 12px;
+            cursor: pointer;
+        }
+
+        #github_modal .github_modal_actions button:hover:not(:disabled) {
+            background: #4a4a4a;
+        }
+
+        #github_modal .github_modal_actions button:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
+        #github_modal .github_modal_actions button.github_primary {
+            background: #2d6a4f;
+            border-color: #40916c;
+        }
+
+        #github_modal #github_modal_status {
+            margin-top: 10px;
+            min-height: 1.2em;
+            color: #9cdcfe;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        #github_connect.github_logged_in {
+            color: #7dcea0;
+        }
     </style>
 
 </head>
 
 <body class="ai-sidebar-hidden">
+
+
+    <!-- GitHub リポジトリ選択 / Push / ログアウト -->
+    <div id="github_modal_overlay" aria-hidden="true">
+        <div id="github_modal" role="dialog" aria-labelledby="github_modal_title">
+            <h2 id="github_modal_title">GitHub</h2>
+            <div class="github_modal_row" id="github_modal_user_row">未ログイン</div>
+            <div class="github_modal_row">
+                <label for="github_repo_select">リポジトリ</label>
+                <select id="github_repo_select" disabled>
+                    <option value="">— ログイン後に一覧を取得 —</option>
+                </select>
+            </div>
+            <div class="github_modal_row">
+                <label for="github_branch_input">ブランチ</label>
+                <input id="github_branch_input" type="text" placeholder="main" disabled />
+            </div>
+            <div class="github_modal_row">
+                <label for="github_commit_message">コミットメッセージ (Push 時)</label>
+                <input id="github_commit_message" type="text" placeholder="Update from Pyodide IDE" disabled />
+            </div>
+            <div class="github_modal_actions">
+                <button type="button" id="github_modal_open" class="github_primary" disabled>Open in Explorer</button>
+                <button type="button" id="github_modal_push" disabled>Push</button>
+                <button type="button" id="github_modal_logout" disabled>Logout</button>
+                <button type="button" id="github_modal_close">Close</button>
+            </div>
+            <div id="github_modal_status"></div>
+        </div>
+    </div>
 
     <div id="loader">
         <div>Initializing Sandbox...</div>
@@ -229,6 +357,19 @@
                     <path
                         d="M50 5C53 25 75 47 95 50C75 53 53 75 50 95C47 75 25 53 5 50C25 47 47 25 50 5Z"
                         fill="url(#geminiBrandGradient)" />
+                </svg>
+            </button>
+
+            <!-- [GitHub] Gemini Nano 起動ボタンの右隣 -->
+            <button id="github_connect" class="other_button_css" title="GitHub" disabled>
+                <svg viewBox="0 0 16 16" width="18" height="18" fill="currentColor" aria-hidden="true">
+                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
+                        0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52
+                        -.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2
+                        -3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82
+                        .64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12
+                        .51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93
+                        -.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
                 </svg>
             </button>
             <button id="drive_dir" class="other_button_css" style="display: none;" disabled>Drive_Dir</button>
@@ -1237,6 +1378,11 @@
         let is_mounted = false; // マウント状態を追跡
         const MOUNT_PATH = "/mnt/vfs_root"; // PyodideのVFS内でマウントするパス
 
+        //-------------------------------------------------------- ### GitHub Explorer 状態（トークンは保持しない）
+        let githubExplorerActive = false; // Script_Explorer が GitHub ツリー表示中か
+        let githubRepoContext = null; // { owner, repo, branch }
+        let githubLoginName = null; // 表示用ログイン名のみ
+
         //-------------------------------------------------------- ### 通信ブリッジ用変数
         const pending_host_requests = {}; // 応答待ちのPromiseを管理 { req_id: {resolve, reject} }
 
@@ -1861,6 +2007,11 @@ await main_async_def()
                     //console.log("# js_obj_global_data[temp] :", js_obj_global_data["temp"])
                 }
 
+                //-------------------------------------------------------- ### GitHub ホスト→IDE
+                else if (typeof data.cmd === "string" && data.cmd.indexOf("github_") === 0) {
+                    handle_github_host_message(data);
+                }
+
                 //-------------------------------------------------------- ### Agent_Run_Handler
                 else if (data.cmd === "agent_run") {
                     const code = data.code;
@@ -2077,7 +2228,13 @@ await main_async_def()
         }
 
         //-------------------------------------------------------- ### Create_&_Open_Tab ###
-        function open_tab(file_name, content, is_preview = false) {
+        // options: { forceUpdate?: boolean, githubPath?: string|null }
+        function open_tab(file_name, content, is_preview = false, options = {}) {
+            const forceUpdate = options && options.forceUpdate === true;
+            const githubPathOpt = options && Object.prototype.hasOwnProperty.call(options, "githubPath")
+                ? options.githubPath
+                : undefined;
+
             // 既に同じ名前のタブが開いているか確認
             for (const id in tabs_data) {
                 if (tabs_data[id].name === file_name) {
@@ -2086,6 +2243,13 @@ await main_async_def()
                         tabs_data[id].content = content; // URLを更新
                         activate_tab(id);
                         return;
+                    }
+                    // GitHub 再読込等: モデル内容を強制更新
+                    if (forceUpdate && tabs_data[id].model && typeof content === "string") {
+                        tabs_data[id].model.setValue(content);
+                    }
+                    if (githubPathOpt !== undefined) {
+                        tabs_data[id].githubPath = githubPathOpt;
                     }
                     activate_tab(id);
                     return;
@@ -2133,7 +2297,8 @@ await main_async_def()
                 model: new_model,
                 type: type, // タブの種類
                 content: content, // プレビューの場合はBlobURL、エディタの場合は初期値など
-                scroll_state: null
+                scroll_state: null,
+                githubPath: githubPathOpt !== undefined ? githubPathOpt : null // GitHub 上の相対パス（token は持たない）
             };
 
             // --- DOM要素の作成 ---
@@ -2608,6 +2773,17 @@ setup_web_serial();
             try {
                 toggle_loading(true, "Refreshing Script Tree..."); // ローディング表示開始
 
+                // GitHub 表示中はホストへツリー再取得を依頼（token は IDE に無い）
+                if (githubExplorerActive && githubRepoContext) {
+                    js_post_message("github_refresh_tree_request", "host", "*", {
+                        owner: githubRepoContext.owner,
+                        repo: githubRepoContext.repo,
+                        branch: githubRepoContext.branch
+                    }, []);
+                    // 応答は github_repo_tree で描画。ローディングはそこで解除
+                    return;
+                }
+
                 // ローカル環境: デフォルトメッセージを表示
                 script_explorer_element.textContent = "Use 'script_dir' to browse local scripts.";
                 toggle_loading(false); // ローディング表示終了
@@ -2616,7 +2792,135 @@ setup_web_serial();
                 console.error(`Error Refreshing Script Tree:`, err);
                 js_result_area_element.value = `Error: ${err.message}`;
                 alert(`読み込み失敗: ${err.message}`);
+                toggle_loading(false);
             }
+        }
+
+        //-------------------------------------------------------- ### GitHub ファイル読み込み（ホスト経由）
+        function load_github_file_content(filePath, fileName) {
+            try {
+                if (!filePath) {
+                    throw new Error("GitHub file path is empty.");
+                }
+                js_result_area_element.value = `Loading ${filePath} from GitHub...`;
+                js_post_message("github_file_request", "host", "*", { path: filePath }, []);
+            } catch (err) {
+                js_result_area_element.value = `Error: ${err.message}`;
+                alert(`GitHub ファイルの読み込み要求に失敗しました: ${err.message}`);
+            }
+        }
+
+        //-------------------------------------------------------- ### GitHub Push 用: 開いている GitHub タブを収集
+        function collect_github_open_files_for_push() {
+            const files = [];
+            for (const tabId in tabs_data) {
+                const tab = tabs_data[tabId];
+                if (!tab || tab.type !== "editor" || !tab.githubPath || !tab.model) {
+                    continue;
+                }
+                files.push({
+                    path: tab.githubPath,
+                    content: tab.model.getValue()
+                });
+            }
+            return files;
+        }
+
+        //-------------------------------------------------------- ### ホストからの GitHub 系メッセージ処理
+        function handle_github_host_message(data) {
+            if (!data || !data.cmd) return false;
+
+            if (data.cmd === "github_auth_state") {
+                githubLoginName = data.loggedIn ? (data.loginName || null) : null;
+                if (!data.loggedIn) {
+                    githubExplorerActive = false;
+                    githubRepoContext = null;
+                }
+                return true;
+            }
+
+            if (data.cmd === "github_repo_tree") {
+                try {
+                    githubExplorerActive = true;
+                    githubRepoContext = {
+                        owner: data.owner,
+                        repo: data.repo,
+                        branch: data.branch || "main"
+                    };
+                    const tree = Array.isArray(data.tree) ? data.tree : [];
+                    // ルートにリポジトリ名フォルダを被せて視認性を上げる
+                    const wrapperTree = [{
+                        name: `${data.owner}/${data.repo}@${githubRepoContext.branch}`,
+                        type: "folder",
+                        path: "",
+                        children: tree
+                    }];
+                    render_file_explorer(wrapperTree, "github", script_explorer_element);
+                    js_result_area_element.value = `GitHub tree loaded: ${data.owner}/${data.repo} (${githubRepoContext.branch})`;
+                } catch (err) {
+                    console.error(err);
+                    js_result_area_element.value = `GitHub tree render error: ${err.message}`;
+                } finally {
+                    toggle_loading(false);
+                }
+                return true;
+            }
+
+            if (data.cmd === "github_file_content") {
+                try {
+                    const path = data.path || "";
+                    const content = typeof data.content === "string" ? data.content : "";
+                    // タブ名はリポジトリ内パスを使用（同名ファイル衝突を避ける）
+                    open_tab(path, content, false, { forceUpdate: true, githubPath: path });
+                    file_name_val = path;
+                    js_result_area_element.value = `${path} loaded from GitHub.`;
+                    if (editor) {
+                        analyze_python_code(editor.getValue());
+                    }
+                } catch (err) {
+                    console.error(err);
+                    js_result_area_element.value = `GitHub file open error: ${err.message}`;
+                    alert(`GitHub ファイルを開けませんでした: ${err.message}`);
+                }
+                return true;
+            }
+
+            if (data.cmd === "github_push_result") {
+                const ok = data.ok === true;
+                const msg = data.message || (ok ? "Push succeeded." : "Push failed.");
+                js_result_area_element.value = msg;
+                if (ok) {
+                    alert(msg);
+                } else {
+                    alert("Push 失敗: " + msg);
+                }
+                return true;
+            }
+
+            if (data.cmd === "github_error") {
+                const msg = data.message || "GitHub error";
+                js_result_area_element.value = msg;
+                toggle_loading(false);
+                alert(msg);
+                return true;
+            }
+
+            // ホストから Push 用ファイル収集を要求された場合
+            if (data.cmd === "github_collect_for_push") {
+                const files = collect_github_open_files_for_push();
+                const message = data.commitMessage || "Update from Pyodide IDE";
+                const branch = (githubRepoContext && githubRepoContext.branch) || data.branch || "main";
+                js_post_message("github_push_request", "host", "*", {
+                    files,
+                    message,
+                    branch,
+                    owner: githubRepoContext ? githubRepoContext.owner : null,
+                    repo: githubRepoContext ? githubRepoContext.repo : null
+                }, []);
+                return true;
+            }
+
+            return false;
         }
 
         //-------------------------------------------------------- ### エクスプローラーアイテムへのイベント付与ロジックの分離 ###
@@ -2632,6 +2936,7 @@ setup_web_serial();
                     else if (type === "local") load_local_file_content_from_handle(item.handle, item.name);
                     else if (type === "local_upload") load_local_file_content_from_file(item.handle, item.name);
                     else if (type === "vfs") load_local_file_content_from_vfs(item.vfs_path, item.name);
+                    else if (type === "github") load_github_file_content(item.path, item.name);
                 });
             }
 
@@ -4669,6 +4974,654 @@ sys.stderr = Web_Stdout()
                 }
             }
 
+
+            //-------------------------------------------------------- ### GitHub Integration (Host) ###
+            // Worker URL はプレースホルダ。デプロイ後に実オリジンへ差し替える
+            const GITHUB_OAUTH_WORKER_ORIGIN = "https://pyodide-ide-github-oauth.admin-hide.workers.dev";
+            const GITHUB_TREE_FILE_LIMIT = 5000; // recursive tree の安全上限
+
+            // file:// では無効。トップレベル https / localhost のみ
+            const githubFeatureEnabled = (() => {
+                if (top_level_flag !== true) return false;
+                const protocol = window.location.protocol;
+                if (protocol === "file:") return false;
+                if (protocol === "https:") return true;
+                if (protocol === "http:") {
+                    const host = window.location.hostname;
+                    return host === "localhost" || host === "127.0.0.1";
+                }
+                return false;
+            })();
+
+            // 認証情報はメモリのみ（永続化禁止）。IDE には渡さない
+            let githubAccessToken = null;
+            let githubUserLogin = null;
+            let githubCurrentRepo = null; // { owner, repo, branch, defaultBranch }
+            let githubOAuthPopup = null;
+            let githubOAuthState = null;
+            let githubOAuthCodeVerifier = null;
+
+            const githubConnectButton = document.getElementById("github_connect");
+            const githubModalOverlay = document.getElementById("github_modal_overlay");
+            const githubModalUserRow = document.getElementById("github_modal_user_row");
+            const githubRepoSelect = document.getElementById("github_repo_select");
+            const githubBranchInput = document.getElementById("github_branch_input");
+            const githubCommitMessage = document.getElementById("github_commit_message");
+            const githubModalOpen = document.getElementById("github_modal_open");
+            const githubModalPush = document.getElementById("github_modal_push");
+            const githubModalLogout = document.getElementById("github_modal_logout");
+            const githubModalClose = document.getElementById("github_modal_close");
+            const githubModalStatus = document.getElementById("github_modal_status");
+
+            function setGithubModalStatus(msg) {
+                if (githubModalStatus) githubModalStatus.textContent = msg || "";
+            }
+
+            function postToIdeGithub(payload) {
+                if (frame && frame.contentWindow) {
+                    frame.contentWindow.postMessage(payload, "*");
+                }
+            }
+
+            function notifyIdeAuthState() {
+                postToIdeGithub({
+                    cmd: "github_auth_state",
+                    loggedIn: !!githubAccessToken,
+                    loginName: githubUserLogin || null
+                });
+            }
+
+            // --- PKCE / 乱数 ---
+            function githubRandomString(length) {
+                const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+                const values = new Uint8Array(length);
+                crypto.getRandomValues(values);
+                let result = "";
+                for (let i = 0; i < length; i++) {
+                    result += charset[values[i] % charset.length];
+                }
+                return result;
+            }
+
+            function githubBufferToBase64Url(buffer) {
+                const bytes = new Uint8Array(buffer);
+                let binary = "";
+                for (let i = 0; i < bytes.length; i++) {
+                    binary += String.fromCharCode(bytes[i]);
+                }
+                return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+            }
+
+            async function githubSha256Base64Url(text) {
+                const data = new TextEncoder().encode(text);
+                const digest = await crypto.subtle.digest("SHA-256", data);
+                return githubBufferToBase64Url(digest);
+            }
+
+            // --- GitHub REST ラッパ（ホスト専任・token は Authorization のみ） ---
+            async function githubApiFetch(path, options = {}) {
+                if (!githubAccessToken) {
+                    throw new Error("GitHub にログインしていません。");
+                }
+                const url = path.startsWith("http") ? path : (GITHUB_API_BASE + path);
+                const headers = Object.assign({
+                    "Accept": "application/vnd.github+json",
+                    "Authorization": "Bearer " + githubAccessToken,
+                    "X-GitHub-Api-Version": "2022-11-28"
+                }, options.headers || {});
+                const res = await fetch(url, Object.assign({}, options, { headers }));
+                if (!res.ok) {
+                    let detail = "";
+                    try {
+                        const errBody = await res.json();
+                        detail = errBody.message || JSON.stringify(errBody);
+                    } catch (e) {
+                        detail = await res.text();
+                    }
+                    throw new Error("GitHub API " + res.status + ": " + detail);
+                }
+                if (res.status === 204) return null;
+                return res.json();
+            }
+
+            async function githubFetchUser() {
+                const user = await githubApiFetch("/user");
+                githubUserLogin = user.login || null;
+                return user;
+            }
+
+            async function githubFetchRepos() {
+                // 直近更新のリポジトリを取得（最大100）
+                const repos = await githubApiFetch("/user/repos?per_page=100&sort=updated");
+                return Array.isArray(repos) ? repos : [];
+            }
+
+            function githubBuildNestedTree(flatTree) {
+                const root = [];
+                let blobCount = 0;
+                const entries = Array.isArray(flatTree) ? flatTree : [];
+                for (let i = 0; i < entries.length; i++) {
+                    const entry = entries[i];
+                    if (!entry || entry.type !== "blob") continue;
+                    blobCount++;
+                    if (blobCount > GITHUB_TREE_FILE_LIMIT) {
+                        break;
+                    }
+                    const parts = String(entry.path || "").split("/").filter(Boolean);
+                    if (parts.length === 0) continue;
+                    let currentList = root;
+                    for (let p = 0; p < parts.length; p++) {
+                        const name = parts[p];
+                        const isFile = p === parts.length - 1;
+                        if (isFile) {
+                            currentList.push({
+                                name: name,
+                                type: "file",
+                                path: entry.path,
+                                sha: entry.sha || null
+                            });
+                        } else {
+                            let folder = null;
+                            for (let k = 0; k < currentList.length; k++) {
+                                if (currentList[k].type === "folder" && currentList[k].name === name) {
+                                    folder = currentList[k];
+                                    break;
+                                }
+                            }
+                            if (!folder) {
+                                folder = {
+                                    name: name,
+                                    type: "folder",
+                                    path: parts.slice(0, p + 1).join("/"),
+                                    children: []
+                                };
+                                currentList.push(folder);
+                            }
+                            currentList = folder.children;
+                        }
+                    }
+                }
+                function sortTree(list) {
+                    list.sort(function (a, b) {
+                        if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
+                        return a.name.localeCompare(b.name);
+                    });
+                    for (let i = 0; i < list.length; i++) {
+                        if (list[i].children) sortTree(list[i].children);
+                    }
+                }
+                sortTree(root);
+                return {
+                    tree: root,
+                    truncated: blobCount > GITHUB_TREE_FILE_LIMIT,
+                    fileCount: Math.min(blobCount, GITHUB_TREE_FILE_LIMIT)
+                };
+            }
+
+            async function githubFetchRepoTree(owner, repo, branch) {
+                const ref = await githubApiFetch(
+                    "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo)
+                    + "/git/ref/heads/" + encodeURIComponent(branch)
+                );
+                const commitSha = ref.object && ref.object.sha;
+                if (!commitSha) throw new Error("ブランチの tip commit を取得できませんでした。");
+                const commit = await githubApiFetch(
+                    "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo)
+                    + "/git/commits/" + commitSha
+                );
+                const treeSha = commit.tree && commit.tree.sha;
+                if (!treeSha) throw new Error("tree SHA を取得できませんでした。");
+                const treeResp = await githubApiFetch(
+                    "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo)
+                    + "/git/trees/" + treeSha + "?recursive=1"
+                );
+                const built = githubBuildNestedTree(treeResp.tree || []);
+                return {
+                    tree: built.tree,
+                    truncated: built.truncated || treeResp.truncated === true,
+                    fileCount: built.fileCount,
+                    commitSha: commitSha,
+                    treeSha: treeSha
+                };
+            }
+
+            async function githubFetchFileContent(owner, repo, path, branch) {
+                const url = "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo)
+                    + "/contents/" + path.split("/").map(encodeURIComponent).join("/")
+                    + "?ref=" + encodeURIComponent(branch);
+                const data = await githubApiFetch(url);
+                if (data && data.type === "file" && typeof data.content === "string") {
+                    // base64（改行含む）をデコード
+                    const b64 = data.content.replace(/\n/g, "");
+                    const binary = atob(b64);
+                    const bytes = new Uint8Array(binary.length);
+                    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                    const text = new TextDecoder("utf-8").decode(bytes);
+                    return { content: text, sha: data.sha || null, path: data.path || path };
+                }
+                throw new Error("ファイル内容を取得できませんでした（ディレクトリの可能性）。");
+            }
+
+            /**
+             * 複数ファイルを Git Data API で 1 コミットとして push（強制 push なし）
+             */
+            async function githubPushFiles(owner, repo, branch, message, files) {
+                if (!files || files.length === 0) {
+                    throw new Error("Push 対象ファイルがありません。GitHub から開いたタブを編集してください。");
+                }
+                const ref = await githubApiFetch(
+                    "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo)
+                    + "/git/ref/heads/" + encodeURIComponent(branch)
+                );
+                const baseCommitSha = ref.object.sha;
+                const baseCommit = await githubApiFetch(
+                    "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo)
+                    + "/git/commits/" + baseCommitSha
+                );
+                const baseTreeSha = baseCommit.tree.sha;
+
+                const treeItems = [];
+                for (let i = 0; i < files.length; i++) {
+                    const f = files[i];
+                    const blob = await githubApiFetch(
+                        "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) + "/git/blobs",
+                        {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ content: f.content, encoding: "utf-8" })
+                        }
+                    );
+                    treeItems.push({
+                        path: f.path,
+                        mode: "100644",
+                        type: "blob",
+                        sha: blob.sha
+                    });
+                }
+
+                const newTree = await githubApiFetch(
+                    "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) + "/git/trees",
+                    {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ base_tree: baseTreeSha, tree: treeItems })
+                    }
+                );
+
+                const newCommit = await githubApiFetch(
+                    "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) + "/git/commits",
+                    {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            message: message || "Update from Pyodide IDE",
+                            tree: newTree.sha,
+                            parents: [baseCommitSha]
+                        })
+                    }
+                );
+
+                // force: false 相当（既定）。fast-forward できない場合は API が失敗する
+                await githubApiFetch(
+                    "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo)
+                    + "/git/refs/heads/" + encodeURIComponent(branch),
+                    {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ sha: newCommit.sha, force: false })
+                    }
+                );
+
+                return { commitSha: newCommit.sha };
+            }
+
+            // --- UI ---
+            function openGithubModal() {
+                if (!githubFeatureEnabled || !githubModalOverlay) return;
+                githubModalOverlay.classList.add("github_modal_visible");
+                githubModalOverlay.setAttribute("aria-hidden", "false");
+                refreshGithubModalUi();
+            }
+
+            function closeGithubModal() {
+                if (!githubModalOverlay) return;
+                githubModalOverlay.classList.remove("github_modal_visible");
+                githubModalOverlay.setAttribute("aria-hidden", "true");
+            }
+
+            function refreshGithubModalUi() {
+                const loggedIn = !!githubAccessToken;
+                if (githubModalUserRow) {
+                    githubModalUserRow.textContent = loggedIn
+                        ? ("ログイン中: " + (githubUserLogin || "(unknown)"))
+                        : "未ログイン — ヘッダーの GitHub ボタンから OAuth ログインしてください";
+                }
+                if (githubRepoSelect) githubRepoSelect.disabled = !loggedIn;
+                if (githubBranchInput) githubBranchInput.disabled = !loggedIn;
+                if (githubCommitMessage) githubCommitMessage.disabled = !loggedIn;
+                if (githubModalOpen) githubModalOpen.disabled = !loggedIn;
+                if (githubModalPush) githubModalPush.disabled = !loggedIn || !githubCurrentRepo;
+                if (githubModalLogout) githubModalLogout.disabled = !loggedIn;
+
+                if (githubConnectButton) {
+                    if (loggedIn) {
+                        githubConnectButton.classList.add("github_logged_in");
+                        githubConnectButton.title = "GitHub (" + (githubUserLogin || "logged in") + ")";
+                    } else {
+                        githubConnectButton.classList.remove("github_logged_in");
+                        githubConnectButton.title = "GitHub";
+                    }
+                }
+            }
+
+            async function populateRepoSelect() {
+                if (!githubAccessToken) return;
+                setGithubModalStatus("リポジトリ一覧を取得中…");
+                const repos = await githubFetchRepos();
+                if (!githubRepoSelect) return;
+                githubRepoSelect.innerHTML = "";
+                if (repos.length === 0) {
+                    const opt = document.createElement("option");
+                    opt.value = "";
+                    opt.textContent = "（リポジトリがありません）";
+                    githubRepoSelect.appendChild(opt);
+                } else {
+                    for (let i = 0; i < repos.length; i++) {
+                        const r = repos[i];
+                        const opt = document.createElement("option");
+                        opt.value = r.full_name;
+                        opt.textContent = r.full_name + (r.private ? " (private)" : "");
+                        opt.dataset.defaultBranch = r.default_branch || "main";
+                        githubRepoSelect.appendChild(opt);
+                    }
+                    // 既定ブランチを入力欄へ
+                    const first = githubRepoSelect.options[0];
+                    if (first && githubBranchInput) {
+                        githubBranchInput.value = first.dataset.defaultBranch || "main";
+                    }
+                }
+                setGithubModalStatus("リポジトリ " + repos.length + " 件を取得しました。");
+            }
+
+            async function startGithubOAuthLogin() {
+                if (!githubFeatureEnabled) return;
+                if (GITHUB_OAUTH_WORKER_ORIGIN.indexOf("YOUR_WORKER_SUBDOMAIN") !== -1) {
+                    alert(
+                        "GitHub OAuth Worker の URL がプレースホルダのままです。\n"
+                        + "index.html の GITHUB_OAUTH_WORKER_ORIGIN をデプロイ済み Worker オリジンに差し替えてください。\n"
+                        + "手順: cloudflare_worker/README.md"
+                    );
+                    return;
+                }
+
+                const state = githubRandomString(32);
+                const codeVerifier = githubRandomString(64);
+                const codeChallenge = await githubSha256Base64Url(codeVerifier);
+                githubOAuthState = state;
+                githubOAuthCodeVerifier = codeVerifier;
+
+                const loginUrl = new URL("/auth/login", GITHUB_OAUTH_WORKER_ORIGIN);
+                loginUrl.searchParams.set("state", state);
+                loginUrl.searchParams.set("code_challenge", codeChallenge);
+                loginUrl.searchParams.set("code_challenge_method", "S256");
+                loginUrl.searchParams.set("code_verifier", codeVerifier);
+                loginUrl.searchParams.set("opener_origin", window.location.origin);
+
+                // ユーザージェスチャ直下で open（ポップアップブロック回避）
+                githubOAuthPopup = window.open(
+                    loginUrl.toString(),
+                    "github_oauth_popup",
+                    "width=600,height=720,menubar=no,toolbar=no"
+                );
+                if (!githubOAuthPopup) {
+                    alert("ポップアップがブロックされました。ブラウザの設定で許可してください。");
+                    githubOAuthState = null;
+                    githubOAuthCodeVerifier = null;
+                }
+            }
+
+            function handleGithubOAuthMessage(event) {
+                // 1) 開いた popup からのメッセージであること
+                if (!githubOAuthPopup || event.source !== githubOAuthPopup) {
+                    return false;
+                }
+                // 2) Worker オリジン一致
+                if (event.origin !== GITHUB_OAUTH_WORKER_ORIGIN) {
+                    console.warn("GitHub OAuth: unexpected origin", event.origin);
+                    return true; // 処理済み扱い（無視）
+                }
+                const data = event.data;
+                if (!data || data.type !== "github_oauth_result") {
+                    return true;
+                }
+                // 3) state 一致
+                if (!githubOAuthState || data.state !== githubOAuthState) {
+                    console.warn("GitHub OAuth: state mismatch");
+                    setGithubModalStatus("OAuth state が一致しません。再度ログインしてください。");
+                    return true;
+                }
+
+                githubOAuthState = null;
+                githubOAuthCodeVerifier = null;
+                try {
+                    if (githubOAuthPopup && !githubOAuthPopup.closed) githubOAuthPopup.close();
+                } catch (e) { /* ignore */ }
+                githubOAuthPopup = null;
+
+                if (!data.ok || !data.access_token) {
+                    setGithubModalStatus("OAuth に失敗しました。");
+                    return true;
+                }
+
+                // メモリのみ保持（localStorage 等へは書かない）
+                githubAccessToken = data.access_token;
+                // token 文字列はログに出さない
+                console.log("# host_frame_log : GitHub OAuth success (token stored in memory only)");
+
+                (async function () {
+                    try {
+                        await githubFetchUser();
+                        notifyIdeAuthState();
+                        refreshGithubModalUi();
+                        openGithubModal();
+                        await populateRepoSelect();
+                    } catch (err) {
+                        console.error(err);
+                        setGithubModalStatus("ユーザー情報の取得に失敗: " + err.message);
+                    }
+                })();
+                return true;
+            }
+
+            function logoutGithub() {
+                githubAccessToken = null;
+                githubUserLogin = null;
+                githubCurrentRepo = null;
+                githubOAuthState = null;
+                githubOAuthCodeVerifier = null;
+                if (githubRepoSelect) {
+                    githubRepoSelect.innerHTML = '<option value="">— ログイン後に一覧を取得 —</option>';
+                }
+                if (githubBranchInput) githubBranchInput.value = "";
+                notifyIdeAuthState();
+                refreshGithubModalUi();
+                setGithubModalStatus("ログアウトしました（トークンは破棄済み）。");
+            }
+
+            async function openSelectedGithubRepo() {
+                if (!githubAccessToken) return;
+                const full = githubRepoSelect && githubRepoSelect.value;
+                if (!full || full.indexOf("/") === -1) {
+                    setGithubModalStatus("リポジトリを選択してください。");
+                    return;
+                }
+                const parts = full.split("/");
+                const owner = parts[0];
+                const repo = parts.slice(1).join("/");
+                const branch = (githubBranchInput && githubBranchInput.value.trim())
+                    || (githubRepoSelect.selectedOptions[0] && githubRepoSelect.selectedOptions[0].dataset.defaultBranch)
+                    || "main";
+
+                setGithubModalStatus("ツリーを取得中: " + full + " @ " + branch);
+                try {
+                    const result = await githubFetchRepoTree(owner, repo, branch);
+                    githubCurrentRepo = { owner, repo, branch, defaultBranch: branch };
+                    refreshGithubModalUi();
+                    postToIdeGithub({
+                        cmd: "github_repo_tree",
+                        owner,
+                        repo,
+                        branch,
+                        tree: result.tree
+                    });
+                    let status = "Explorer に表示しました (" + result.fileCount + " files)";
+                    if (result.truncated) status += " ※件数上限または API truncated";
+                    setGithubModalStatus(status);
+                } catch (err) {
+                    console.error(err);
+                    setGithubModalStatus("ツリー取得失敗: " + err.message);
+                    postToIdeGithub({ cmd: "github_error", message: err.message });
+                }
+            }
+
+            function requestPushFromIde() {
+                if (!githubAccessToken || !githubCurrentRepo) {
+                    setGithubModalStatus("先にリポジトリを Open してください。");
+                    return;
+                }
+                const msg = (githubCommitMessage && githubCommitMessage.value.trim())
+                    || "Update from Pyodide IDE";
+                setGithubModalStatus("IDE から変更ファイルを収集中…");
+                postToIdeGithub({
+                    cmd: "github_collect_for_push",
+                    commitMessage: msg,
+                    branch: githubCurrentRepo.branch
+                });
+            }
+
+            async function handleGithubPushRequest(obj) {
+                try {
+                    if (!githubAccessToken) throw new Error("未ログインです。");
+                    const owner = (obj && obj.owner) || (githubCurrentRepo && githubCurrentRepo.owner);
+                    const repo = (obj && obj.repo) || (githubCurrentRepo && githubCurrentRepo.repo);
+                    const branch = (obj && obj.branch) || (githubCurrentRepo && githubCurrentRepo.branch) || "main";
+                    const message = (obj && obj.message) || "Update from Pyodide IDE";
+                    const files = (obj && obj.files) || [];
+                    setGithubModalStatus("Push 中… (" + files.length + " files)");
+                    const result = await githubPushFiles(owner, repo, branch, message, files);
+                    const okMsg = "Push 成功: " + owner + "/" + repo + "@" + branch
+                        + " commit " + result.commitSha.substring(0, 7);
+                    setGithubModalStatus(okMsg);
+                    postToIdeGithub({
+                        cmd: "github_push_result",
+                        ok: true,
+                        message: okMsg,
+                        commitSha: result.commitSha
+                    });
+                } catch (err) {
+                    console.error(err);
+                    setGithubModalStatus("Push 失敗: " + err.message);
+                    postToIdeGithub({
+                        cmd: "github_push_result",
+                        ok: false,
+                        message: err.message
+                    });
+                }
+            }
+
+            async function handleGithubFileRequest(path) {
+                try {
+                    if (!githubCurrentRepo) throw new Error("リポジトリが選択されていません。");
+                    const { owner, repo, branch } = githubCurrentRepo;
+                    const file = await githubFetchFileContent(owner, repo, path, branch);
+                    postToIdeGithub({
+                        cmd: "github_file_content",
+                        path: file.path,
+                        content: file.content,
+                        sha: file.sha
+                    });
+                } catch (err) {
+                    console.error(err);
+                    postToIdeGithub({ cmd: "github_error", message: err.message });
+                }
+            }
+
+            async function handleGithubRefreshTree() {
+                if (!githubCurrentRepo) return;
+                try {
+                    const { owner, repo, branch } = githubCurrentRepo;
+                    const result = await githubFetchRepoTree(owner, repo, branch);
+                    postToIdeGithub({
+                        cmd: "github_repo_tree",
+                        owner,
+                        repo,
+                        branch,
+                        tree: result.tree
+                    });
+                } catch (err) {
+                    postToIdeGithub({ cmd: "github_error", message: err.message });
+                }
+            }
+
+            // 機能無効時はボタン非表示。有効時は初期 disabled（script_complete で有効化）
+            if (githubConnectButton) {
+                if (!githubFeatureEnabled) {
+                    githubConnectButton.style.display = "none";
+                } else {
+                    githubConnectButton.style.display = "";
+                    githubConnectButton.addEventListener("click", async function () {
+                        if (!githubAccessToken) {
+                            await startGithubOAuthLogin();
+                        } else {
+                            openGithubModal();
+                            try {
+                                await populateRepoSelect();
+                            } catch (err) {
+                                setGithubModalStatus(err.message);
+                            }
+                        }
+                    });
+                }
+            }
+
+            if (githubModalClose) {
+                githubModalClose.addEventListener("click", closeGithubModal);
+            }
+            if (githubModalOverlay) {
+                githubModalOverlay.addEventListener("click", function (e) {
+                    if (e.target === githubModalOverlay) closeGithubModal();
+                });
+            }
+            if (githubModalLogout) {
+                githubModalLogout.addEventListener("click", logoutGithub);
+            }
+            if (githubModalOpen) {
+                githubModalOpen.addEventListener("click", function () {
+                    openSelectedGithubRepo();
+                });
+            }
+            if (githubModalPush) {
+                githubModalPush.addEventListener("click", function () {
+                    requestPushFromIde();
+                });
+            }
+            if (githubRepoSelect) {
+                githubRepoSelect.addEventListener("change", function () {
+                    const opt = githubRepoSelect.selectedOptions[0];
+                    if (opt && githubBranchInput && opt.dataset.defaultBranch) {
+                        githubBranchInput.value = opt.dataset.defaultBranch;
+                    }
+                });
+            }
+
+            // control_button_list に追加（機能有効時のみ）
+            if (githubFeatureEnabled) {
+                control_button_list.push("github_connect");
+            }
+
+            console.log("# host_frame_log : githubFeatureEnabled :", githubFeatureEnabled);
+
+
             if (top_level_flag === false) {
                 try {
                     drive_dir_button.style.display = "none";
@@ -5733,6 +6686,11 @@ ${newRawLog}`;
                 // 修正: 拡張機能のcontent script (window) からのメッセージも許可する
                 // 許可されたオリジンの 親window からのメッセージも許可する
 
+                // GitHub OAuth ポップアップ（Worker オリジン）からの結果を先に処理
+                if (typeof handleGithubOAuthMessage === "function" && handleGithubOAuthMessage(event)) {
+                    return;
+                }
+
                 const allowed_origins = [
                     "https://gemini.google.com"
                 ];
@@ -5828,6 +6786,38 @@ ${newRawLog}`;
                         frame.contentWindow.postMessage({ req_id, status: "error", error: error.toString() }, "*");
                     }
                     return; // 処理終了
+                }
+
+                //-------------------------------------------------------- ### GitHub 連携（IDE → Host）※ token は含めない
+                if (data && typeof data.cmd === "string" && data.cmd.indexOf("github_") === 0) {
+                    // IDE フレームからのみ受理
+                    if (event.source !== frame.contentWindow) {
+                        console.warn("Security Alert: github_* from non-IDE source ignored.");
+                        return;
+                    }
+                    if (!githubFeatureEnabled) {
+                        postToIdeGithub({ cmd: "github_error", message: "GitHub 機能は現在のホスティングでは無効です。" });
+                        return;
+                    }
+                    const gObj = data.obj || {};
+                    try {
+                        if (data.cmd === "github_file_request") {
+                            await handleGithubFileRequest(gObj.path);
+                        } else if (data.cmd === "github_push_request") {
+                            await handleGithubPushRequest(gObj);
+                        } else if (data.cmd === "github_refresh_tree_request") {
+                            await handleGithubRefreshTree();
+                        } else if (data.cmd === "github_open_repo_request") {
+                            // 将来 IDE 側 UI 用。現状はホストモーダルで Open
+                            setGithubModalStatus("リポジトリ Open はホストの GitHub モーダルから行ってください。");
+                        } else {
+                            console.warn("Unknown github cmd:", data.cmd);
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        postToIdeGithub({ cmd: "github_error", message: String(err.message || err) });
+                    }
+                    return;
                 }
 
                 //-------------------------------------------------------- ### Fetch API (POST) 依頼受信
