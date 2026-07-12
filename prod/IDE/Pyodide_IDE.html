@@ -13,7 +13,7 @@
 		script-src 'self' https://script.google.com 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com;
         style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net;
 		font-src 'self' https://cdnjs.cloudflare.com;
-		connect-src 'self' https://script.google.com https://script.googleusercontent.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://pypi.org https://files.pythonhosted.org https://api.github.com;
+		connect-src 'self' https://script.google.com https://script.googleusercontent.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://pypi.org https://files.pythonhosted.org https://api.github.com https://pyodide-ide-github-oauth.admin-hide.workers.dev;
 		frame-src 'self' blob: data:;
 		img-src 'self' data: blob:;
 		worker-src 'self' blob:;
@@ -5410,7 +5410,9 @@ sys.stderr = Web_Stdout()
                 githubOAuthPopup = null;
 
                 if (!data.ok || !data.access_token) {
-                    setGithubModalStatus("OAuth に失敗しました。");
+                    // Worker から error 文字列が来る場合は表示（token は含まれない）
+                    const errMsg = (data && data.error) ? String(data.error) : "OAuth に失敗しました。";
+                    setGithubModalStatus(errMsg);
                     return true;
                 }
 
@@ -5434,7 +5436,16 @@ sys.stderr = Web_Stdout()
                 return true;
             }
 
-            function logoutGithub() {
+            /**
+             * GitHub ログアウト
+             * 1) Worker 経由で OAuth grant を revoke（共有 PC 対策）
+             * 2) ホストメモリ上の token を破棄（永続化はしない）
+             * 失敗してもメモリは必ずクリアする
+             */
+            async function logoutGithub() {
+                // revoke 用に退避（先に UI から消す）
+                const tokenToRevoke = githubAccessToken;
+
                 githubAccessToken = null;
                 githubUserLogin = null;
                 githubCurrentRepo = null;
@@ -5444,9 +5455,61 @@ sys.stderr = Web_Stdout()
                     githubRepoSelect.innerHTML = '<option value="">— ログイン後に一覧を取得 —</option>';
                 }
                 if (githubBranchInput) githubBranchInput.value = "";
+                if (githubCommitMessage) githubCommitMessage.value = "";
                 notifyIdeAuthState();
                 refreshGithubModalUi();
-                setGithubModalStatus("ログアウトしました（トークンは破棄済み）。");
+
+                // Worker 未設定時はメモリ破棄のみ
+                if (!tokenToRevoke || GITHUB_OAUTH_WORKER_ORIGIN.indexOf("YOUR_WORKER_SUBDOMAIN") !== -1) {
+                    setGithubModalStatus(
+                        "ログアウトしました（ローカル token 破棄済み）。"
+                        + " 共有PCでは github.com からもログアウトしてください。"
+                    );
+                    return;
+                }
+
+                setGithubModalStatus("GitHub 認可（grant）を取り消し中…");
+                let revokeOk = false;
+                let revokeDetail = "";
+                try {
+                    const res = await fetch(GITHUB_OAUTH_WORKER_ORIGIN + "/auth/logout", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Accept": "application/json"
+                        },
+                        body: JSON.stringify({ access_token: tokenToRevoke })
+                    });
+                    let data = null;
+                    try {
+                        data = await res.json();
+                    } catch (parseErr) {
+                        data = null;
+                    }
+                    revokeOk = !!(res.ok && data && data.ok);
+                    if (!revokeOk) {
+                        revokeDetail = (data && (data.error || data.detail))
+                            ? String(data.error || data.detail)
+                            : ("HTTP " + res.status);
+                    }
+                } catch (err) {
+                    revokeDetail = err && err.message ? err.message : String(err);
+                    console.warn("GitHub grant revoke failed:", revokeDetail);
+                }
+
+                // token 文字列はログ・UI に出さない
+                if (revokeOk) {
+                    setGithubModalStatus(
+                        "ログアウトしました（grant 取り消し済み）。"
+                        + " 共有PCでは github.com からもログアウトしてください。"
+                    );
+                } else {
+                    setGithubModalStatus(
+                        "ログアウトしました（ローカル token は破棄済み。"
+                        + " grant 取り消しは失敗: " + (revokeDetail || "unknown") + "）。"
+                        + " 必要なら github.com/settings/applications で手動 revoke してください。"
+                    );
+                }
             }
 
             async function openSelectedGithubRepo() {
@@ -5594,7 +5657,15 @@ sys.stderr = Web_Stdout()
                 });
             }
             if (githubModalLogout) {
-                githubModalLogout.addEventListener("click", logoutGithub);
+                // async logout（grant revoke 含む）。連打防止は disabled で担保
+                githubModalLogout.addEventListener("click", function () {
+                    if (githubModalLogout.disabled) return;
+                    githubModalLogout.disabled = true;
+                    Promise.resolve(logoutGithub()).finally(function () {
+                        // logout 後は未ログインのため refresh で disabled のままになる
+                        refreshGithubModalUi();
+                    });
+                });
             }
             if (githubModalOpen) {
                 githubModalOpen.addEventListener("click", function () {
