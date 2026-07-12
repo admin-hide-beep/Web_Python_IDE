@@ -4978,7 +4978,8 @@ sys.stderr = Web_Stdout()
             //-------------------------------------------------------- ### GitHub Integration (Host) ###
             // Worker URL はプレースホルダ。デプロイ後に実オリジンへ差し替える
             const GITHUB_OAUTH_WORKER_ORIGIN = "https://pyodide-ide-github-oauth.admin-hide.workers.dev";
-            const GITHUB_TREE_FILE_LIMIT = 5000; // recursive tree の安全上限
+			const GITHUB_API_BASE = "https://api.github.com";
+			const GITHUB_TREE_FILE_LIMIT = 5000;
 
             // file:// では無効。トップレベル https / localhost のみ
             const githubFeatureEnabled = (() => {
