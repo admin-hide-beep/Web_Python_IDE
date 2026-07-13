@@ -58,6 +58,21 @@
             overflow: hidden;
         }
 
+        /* VFS 外部 DnD 用: ホスト側オーバーレイ（sandbox では Entry API 不可のためホストが受ける） */
+        #host_vfs_drop_overlay {
+            display: none;
+            position: fixed;
+            z-index: 100000;
+            box-sizing: border-box;
+            border: 2px dashed #888;
+            background-color: rgba(68, 68, 68, 0.35);
+            pointer-events: none;
+        }
+        #host_vfs_drop_overlay.active {
+            display: block;
+            pointer-events: auto; /* active 時のみ drop を受け取る */
+        }
+
         .ai_sidebar_css {
             width: 350px;
             background-color: #252526;
@@ -2011,6 +2026,23 @@ await main_async_def()
                     handle_github_host_message(data);
                 }
 
+                //-------------------------------------------------------- ### VFS DnD（ホスト代理読み取り → IDE 書き込み）
+                else if (data.cmd === "vfs_dnd_hit_test") {
+                    handle_vfs_dnd_hit_test(data.x, data.y);
+                }
+                else if (data.cmd === "vfs_drop_write") {
+                    // ホストが Entry API で読んだファイル群を VFS へ書き込む
+                    apply_host_vfs_drop_write(data).catch((err) => {
+                        console.error("vfs_drop_write failed:", err);
+                        js_result_area_element.value = `Drop Error: ${err.message || err}`;
+                        toggle_loading(false);
+                    });
+                }
+                else if (data.cmd === "vfs_drop_error") {
+                    js_result_area_element.value = `Drop Error: ${data.message || "unknown"}`;
+                    toggle_loading(false);
+                }
+
                 //-------------------------------------------------------- ### Agent_Run_Handler
                 else if (data.cmd === "agent_run") {
                     const code = data.code;
@@ -3019,17 +3051,19 @@ setup_web_serial();
 
                     row_div.addEventListener("drop", async (e) => {
                         e.preventDefault();
-                        e.stopPropagation(); // コンテナ側 handle_vfs_drop への二重処理を防止
+                        e.stopPropagation(); // コンテナ側への二重処理を防止
                         row_div.classList.remove("vfs_drop_target");
 
-                        // 1) VFS 内部の移動（従来動作）
+                        // 1) VFS 内部の移動（従来動作・IDE 内で完結）
                         const src_path = e.dataTransfer.getData("application/vfs-path");
                         if (src_path) {
                             handle_vfs_move(src_path, item.vfs_path);
                             return;
                         }
 
-                        // 2) OS からのファイル/フォルダ → このフォルダ配下へ追加
+                        // 2) OS からの外部 DnD
+                        //    フォルダ階層は sandbox(null origin) では読めないため、
+                        //    ホスト側オーバーレイ経由が本線。ここに来た場合は FileList フォールバック。
                         await handle_vfs_drop(e, item.vfs_path);
                     });
 
@@ -3086,6 +3120,10 @@ setup_web_serial();
                 const row_div = document.createElement("div");
                 row_div.classList.add("item_row");
                 row_div.textContent = item.name;
+                // ホスト側 DnD ヒットテスト用（VFS フォルダのみ）
+                if (type === "vfs" && item.type === "folder" && item.vfs_path) {
+                    row_div.setAttribute("data-vfs-folder-path", item.vfs_path);
+                }
                 li.appendChild(row_div);
 
                 li.classList.add("explorer-item");
@@ -3595,6 +3633,11 @@ setup_web_serial();
             if (tree.length === 0) {
                 vfs_explorer_element.textContent = `VFS path ${MOUNT_PATH} is empty. Use "VFS_Upload".`;
             }
+
+            // ホスト DnD オーバーレイ位置を更新
+            if (typeof report_vfs_drop_zone_rect === "function") {
+                report_vfs_drop_zone_rect();
+            }
         }
 
         //-------------------------------------------------------- ### Syntax_Check_Logic ###
@@ -3956,229 +3999,242 @@ json.dumps(result)
         }
 
         //-------------------------------------------------------- ### VFS_Drag&Drop_Logic ###
+        // 注意: sandbox iframe (srcdoc / null origin) では DirectoryEntry.readEntries が
+        // EncodingError (Data URL 長制限) で失敗する。フォルダ DnD はホスト側 Entry API で読み、
+        // postMessage で IDE に転送して VFS へ書き込む（本線）。
+        // IDE 側は内部移動・FileList フォールバック・ヒットテスト・書き込みのみ担当する。
+
+        /** 外部 OS からのファイル DnD か（VFS 内部移動ではないか） */
+        function is_external_file_drag(event) {
+            const types = Array.from((event.dataTransfer && event.dataTransfer.types) || []);
+            return types.includes("Files") && !types.includes("application/vfs-path");
+        }
+
+        /** VFS コンテナの矩形をホストへ通知（オーバーレイ位置決め用） */
+        function report_vfs_drop_zone_rect() {
+            if (!vfs_container_element) return;
+            const r = vfs_container_element.getBoundingClientRect();
+            js_post_message("vfs_drop_zone_rect", "host", "*", {
+                left: r.left,
+                top: r.top,
+                width: r.width,
+                height: r.height
+            }, []);
+        }
+
+        let last_vfs_external_drag_notify_ms = 0;
+
+        /** ホストに外部 DnD 中であることを伝え、オーバーレイを出させる */
+        function notify_host_vfs_external_drag() {
+            report_vfs_drop_zone_rect();
+            const now = Date.now();
+            // 過剰な postMessage を抑制
+            if (now - last_vfs_external_drag_notify_ms < 40) return;
+            last_vfs_external_drag_notify_ms = now;
+            js_post_message("vfs_external_drag_enter", "host", "*", {}, []);
+        }
+
         /**
-         * DirectoryEntry の子エントリを全件取得する
-         * readEntries は一度に全件を返さないため、空配列になるまで繰り返す
+         * ホストからのヒットテスト要求: iframe 内座標 (x,y) のドロップ先パスを返す
          */
-        function read_all_directory_entries(directory_entry) {
-            return new Promise((resolve, reject) => {
-                const reader = directory_entry.createReader();
-                const all_entries = [];
-                const read_batch = () => {
-                    reader.readEntries((batch) => {
-                        if (!batch || batch.length === 0) {
-                            resolve(all_entries);
-                            return;
-                        }
-                        all_entries.push(...batch);
-                        read_batch();
-                    }, reject);
-                };
-                read_batch();
+        function handle_vfs_dnd_hit_test(x, y) {
+            // 前回の強調を解除
+            document.querySelectorAll("#vfs_explorer_container .vfs_drop_target").forEach((el) => {
+                el.classList.remove("vfs_drop_target");
             });
+            if (vfs_container_element) {
+                vfs_container_element.classList.remove("dragover");
+            }
+
+            const el = document.elementFromPoint(x, y);
+            if (!el) {
+                js_post_message("vfs_dnd_target", "host", "*", { path: null, in_vfs: false }, []);
+                return;
+            }
+
+            const in_vfs = el.closest("#vfs_explorer_container");
+            if (!in_vfs) {
+                js_post_message("vfs_dnd_target", "host", "*", { path: null, in_vfs: false }, []);
+                return;
+            }
+
+            const folder_row = el.closest("[data-vfs-folder-path]");
+            let path = MOUNT_PATH;
+            if (folder_row) {
+                path = folder_row.getAttribute("data-vfs-folder-path") || MOUNT_PATH;
+                folder_row.classList.add("vfs_drop_target");
+            } else {
+                // コンテナ直下（フォルダ行以外）→ ルート
+                vfs_container_element.classList.add("dragover");
+            }
+
+            js_post_message("vfs_dnd_target", "host", "*", { path: path, in_vfs: true }, []);
         }
 
         /**
-         * FileSystemEntry から相対パス付きファイル一覧を再帰収集する
-         * @returns {Promise<Array<{file: File|null, relative_path: string, is_directory?: boolean}>>}
+         * 相対パスを正規化し、危険なパスを弾く
+         * @returns {string|null}
          */
-        async function collect_files_from_entry(entry, path_prefix) {
-            const results = [];
-            if (!entry) return results;
-
-            if (entry.isFile) {
-                const file = await new Promise((resolve, reject) => {
-                    entry.file(resolve, reject);
-                });
-                const relative_path = path_prefix ? `${path_prefix}/${entry.name}` : entry.name;
-                results.push({ file, relative_path });
-                return results;
-            }
-
-            if (entry.isDirectory) {
-                const next_prefix = path_prefix ? `${path_prefix}/${entry.name}` : entry.name;
-                let child_entries = [];
-                try {
-                    child_entries = await read_all_directory_entries(entry);
-                } catch (err) {
-                    console.warn("Directory read failed:", entry.name, err);
-                    return results;
-                }
-
-                // 空フォルダも VFS 上に作成できるようマーカーを残す
-                if (child_entries.length === 0) {
-                    results.push({ file: null, relative_path: next_prefix, is_directory: true });
-                    return results;
-                }
-
-                for (const child of child_entries) {
-                    const child_results = await collect_files_from_entry(child, next_prefix);
-                    results.push(...child_results);
-                }
-            }
-            return results;
+        function normalize_vfs_relative_path(raw_path) {
+            let rel = String(raw_path || "").replace(/\\/g, "/");
+            while (rel.startsWith("/")) rel = rel.slice(1);
+            if (!rel || rel.split("/").includes("..")) return null;
+            return rel;
         }
 
         /**
-         * DataTransfer からアップロード対象を収集する
-         * Entry API（階層対応）を優先し、失敗時は files にフォールバック（null origin 対策）
+         * ホストから受け取った { relative_path, data|is_directory } を VFS に書き込む
+         * 既存内容は消さない（追加アップロード）
          */
-        async function collect_dropped_files(data_transfer) {
-            const results = [];
-            if (!data_transfer) return results;
+        async function apply_host_vfs_drop_write(data) {
+            const target_dir = data.target_dir || MOUNT_PATH;
+            const files = Array.isArray(data.files) ? data.files : [];
 
-            // --- Entry API 優先（フォルダ単位 DnD の階層維持） ---
-            const items = data_transfer.items;
-            if (items && items.length > 0) {
-                const entry_jobs = [];
-                for (let i = 0; i < items.length; i++) {
-                    const item = items[i];
-                    if (item.kind !== "file") continue;
+            toggle_loading(true, "Processing Dropped Files...");
+            js_result_area_element.value = "Processing dropped files...";
+            vfs_container_element.classList.remove("dragover");
+            document.querySelectorAll("#vfs_explorer_container .vfs_drop_target").forEach((el) => {
+                el.classList.remove("vfs_drop_target");
+            });
 
-                    let entry = null;
-                    try {
-                        if (typeof item.webkitGetAsEntry === "function") {
-                            entry = item.webkitGetAsEntry();
-                        }
-                    } catch (err) {
-                        // Opaque Origin 等で失敗しうる → files フォールバックへ
-                        console.warn("webkitGetAsEntry failed:", err);
+            try {
+                if (!pyodide_js || !pyodide_js.FS) {
+                    throw new Error("Pyodide FS is not ready.");
+                }
+                if (!pyodide_js.FS.analyzePath(target_dir).exists) {
+                    pyodide_js.FS.mkdirTree(target_dir);
+                }
+
+                let count = 0;
+                for (const f of files) {
+                    const rel = normalize_vfs_relative_path(f.relative_path);
+                    if (!rel) {
+                        console.warn("Skipped unsafe path:", f.relative_path);
+                        continue;
+                    }
+                    const vfs_path = `${target_dir}/${rel}`;
+
+                    if (f.is_directory) {
+                        try { pyodide_js.FS.mkdirTree(vfs_path); } catch (e) { /* 既存可 */ }
+                        continue;
                     }
 
-                    if (entry) {
-                        entry_jobs.push(collect_files_from_entry(entry, ""));
+                    if (f.data == null) continue;
+
+                    const dir_name = vfs_path.substring(0, vfs_path.lastIndexOf("/"));
+                    if (dir_name) {
+                        pyodide_js.FS.mkdirTree(dir_name);
                     }
+
+                    // postMessage 経由の ArrayBuffer / Uint8Array 両対応
+                    const bytes = f.data instanceof Uint8Array
+                        ? f.data
+                        : new Uint8Array(f.data);
+                    pyodide_js.FS.writeFile(vfs_path, bytes);
+                    count++;
                 }
 
-                if (entry_jobs.length > 0) {
-                    try {
-                        const nested_lists = await Promise.all(entry_jobs);
-                        for (const list of nested_lists) {
-                            results.push(...list);
-                        }
-                        if (results.length > 0) {
-                            return results;
-                        }
-                    } catch (err) {
-                        console.warn("Entry collection failed, fallback to files:", err);
-                        results.length = 0;
-                    }
-                }
+                is_mounted = true;
+                mounted_dir_handle = null;
+                refresh_vfs_explorer_view();
+                js_result_area_element.value = `Dropped & Uploaded ${count} files.`;
+
+            } catch (e) {
+                console.error("apply_host_vfs_drop_write:", e);
+                js_result_area_element.value = `Drop Error: ${e.message}`;
+            } finally {
+                toggle_loading(false);
             }
-
-            // --- フォールバック: FileList（フラット配置。階層情報は webkitRelativePath があれば利用） ---
-            const files = data_transfer.files;
-            if (!files || files.length === 0) return results;
-
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                // File API ではフォルダが 0/4096 バイトの偽ファイルになる場合がある
-                if (!file.type && file.size % 4096 === 0 && file.size <= 4096) {
-                    console.warn("Skipped folder or invalid file:", file.name);
-                    continue;
-                }
-                const relative_path = (file.webkitRelativePath && file.webkitRelativePath.length > 0)
-                    ? file.webkitRelativePath
-                    : file.name;
-                results.push({ file, relative_path });
-            }
-            return results;
         }
 
         /**
-         * 収集済みファイルを VFS の target_dir 配下へ書き込む（既存内容は消さない）
-         * @returns {Promise<number>} 書き込んだファイル数
-         */
-        async function write_files_to_vfs(file_entries, target_dir) {
-            if (!pyodide_js.FS.analyzePath(target_dir).exists) {
-                pyodide_js.FS.mkdirTree(target_dir);
-            }
-
-            let count = 0;
-            for (const entry of file_entries) {
-                // 相対パスの正規化と簡易パストラバーサル対策
-                let rel = String(entry.relative_path || "").replace(/\\/g, "/");
-                while (rel.startsWith("/")) rel = rel.slice(1);
-                if (!rel || rel.split("/").includes("..")) {
-                    console.warn("Skipped unsafe path:", entry.relative_path);
-                    continue;
-                }
-
-                const vfs_path = `${target_dir}/${rel}`;
-
-                // 空ディレクトリマーカー
-                if (entry.is_directory) {
-                    try { pyodide_js.FS.mkdirTree(vfs_path); } catch (e) { /* 既存可 */ }
-                    continue;
-                }
-
-                if (!entry.file) continue;
-
-                const dir_name = vfs_path.substring(0, vfs_path.lastIndexOf("/"));
-                if (dir_name) {
-                    pyodide_js.FS.mkdirTree(dir_name);
-                }
-
-                const buffer = await entry.file.arrayBuffer();
-                pyodide_js.FS.writeFile(vfs_path, new Uint8Array(buffer));
-                count++;
-            }
-            return count;
-        }
-
-        /**
-         * VFS への外部 DnD 入口
+         * IDE 内に直接 drop された場合のフォールバック（FileList のみ）
+         * フォルダ階層は読めないため、単一/複数ファイル向け。フォルダはホスト本線を使う。
          * @param {DragEvent} event
-         * @param {string} [target_dir] 省略時は MOUNT_PATH（コンテナ直下）
+         * @param {string} [target_dir]
          */
         async function handle_vfs_drop(event, target_dir) {
             event.preventDefault();
-            vfs_container_element.classList.remove("dragover"); // 枠線を消す
+            vfs_container_element.classList.remove("dragover");
 
-            // 内部移動はフォルダ行ハンドラが担当。コンテナに内部 drop が来た場合は無視（従来どおり）
+            // 内部移動はフォルダ行ハンドラ担当
             const src_path = event.dataTransfer.getData("application/vfs-path");
             if (src_path) {
                 return;
             }
 
             const dest_dir = target_dir || MOUNT_PATH;
+            const file_list = event.dataTransfer.files;
 
-            toggle_loading(true, "Processing Dropped Files..."); // ローディング表示開始
+            // FileList が空 = フォルダ DnD の典型。ホストオーバーレイへ委譲済み想定
+            if (!file_list || file_list.length === 0) {
+                // オーバーレイが出る前の瞬間 drop に備え、最終通知
+                notify_host_vfs_external_drag();
+                js_result_area_element.value =
+                    "Folder drop is handled by host. If nothing appeared, drop again on VFS area.";
+                return;
+            }
+
+            toggle_loading(true, "Processing Dropped Files...");
             js_result_area_element.value = "Processing dropped files...";
 
             try {
-                const file_entries = await collect_dropped_files(event.dataTransfer);
-                if (!file_entries || file_entries.length === 0) {
-                    js_result_area_element.value = "No files found in drop.";
-                    return;
+                if (!pyodide_js.FS.analyzePath(dest_dir).exists) {
+                    pyodide_js.FS.mkdirTree(dest_dir);
                 }
 
-                // 既存 VFS 内容は消さず追加書き込み
-                const count = await write_files_to_vfs(file_entries, dest_dir);
-                is_mounted = true; // アップロードボタン経路と状態を揃える
-                mounted_dir_handle = null; // NativeFS ではない
+                let count = 0;
+                for (let i = 0; i < file_list.length; i++) {
+                    const file = file_list[i];
+                    // フォルダ偽ファイルをスキップ
+                    if (!file.type && file.size % 4096 === 0 && file.size <= 4096) {
+                        console.warn("Skipped folder or invalid file:", file.name);
+                        continue;
+                    }
+                    const rel = normalize_vfs_relative_path(
+                        (file.webkitRelativePath && file.webkitRelativePath.length > 0)
+                            ? file.webkitRelativePath
+                            : file.name
+                    );
+                    if (!rel) continue;
 
+                    const vfs_path = `${dest_dir}/${rel}`;
+                    const dir_name = vfs_path.substring(0, vfs_path.lastIndexOf("/"));
+                    if (dir_name) {
+                        pyodide_js.FS.mkdirTree(dir_name);
+                    }
+                    const buffer = await file.arrayBuffer();
+                    pyodide_js.FS.writeFile(vfs_path, new Uint8Array(buffer));
+                    count++;
+                }
+
+                is_mounted = true;
+                mounted_dir_handle = null;
                 refresh_vfs_explorer_view();
                 js_result_area_element.value = `Dropped & Uploaded ${count} files.`;
 
             } catch (e) {
                 js_result_area_element.value = `Drop Error: ${e.message}`;
-
             } finally {
-                toggle_loading(false); // ローディング表示終了
+                toggle_loading(false);
             }
         }
 
         function setup_drag_and_drop() {
             const drop_zone = document.getElementById("vfs_explorer_container");
 
+            drop_zone.addEventListener("dragenter", (e) => {
+                if (!is_external_file_drag(e)) return;
+                // ホスト側オーバーレイを起動（フォルダ Entry API 用）
+                notify_host_vfs_external_drag();
+            });
+
             drop_zone.addEventListener("dragover", (e) => {
                 e.preventDefault(); // drop を許可
-                const is_internal = Array.from(e.dataTransfer.types || []).includes("application/vfs-path");
-                // 外部 DnD 時のみコンテナを強調（内部移動はフォルダ行が強調）
-                if (!is_internal) {
+                if (is_external_file_drag(e)) {
                     drop_zone.classList.add("dragover");
                     e.dataTransfer.dropEffect = "copy";
+                    notify_host_vfs_external_drag();
                 }
             });
 
@@ -4187,10 +4243,14 @@ json.dumps(result)
                 drop_zone.classList.remove("dragover");
             });
 
-            // コンテナ直下へのドロップ → MOUNT_PATH へ追加
+            // コンテナ直下へのドロップ（ホストオーバーレイが間に合わない場合のフォールバック）
             drop_zone.addEventListener("drop", (e) => {
                 handle_vfs_drop(e);
             });
+
+            // 初期矩形をホストへ
+            report_vfs_drop_zone_rect();
+            window.addEventListener("resize", report_vfs_drop_zone_rect);
         }
 
         //-------------------------------------------------------- ### VFS_File_mover ###
@@ -6987,6 +7047,453 @@ ${newRawLog}`;
             const GNM = new GeminiNanoManager();
             GNM.initializeEvents();
 
+            //-------------------------------------------------------- ### VFS 外部 DnD（ホスト側代理読み取り） ###
+            // sandbox iframe (null origin) では DirectoryEntry が EncodingError になるため、
+            // ホスト document が drop を受け、ファイルを読んで IDE へ postMessage する。
+            //
+            // 重要:
+            // - DataTransfer は drop イベントの同期区間でスナップショットすること
+            // - オーバーレイは視覚のみ (pointer-events: none)。実イベントは document キャプチャで受ける
+            // - iframe は capture 中 pointer-events: none にしてホストへイベントを通す
+            const hostVfsDropOverlay = document.createElement("div");
+            hostVfsDropOverlay.id = "host_vfs_drop_overlay";
+            hostVfsDropOverlay.title = "Drop files/folders to VFS";
+            document.body.appendChild(hostVfsDropOverlay);
+
+            let hostVfsZoneRect = null; // IDE 内座標の VFS コンテナ矩形
+            let hostVfsDropTargetPath = "/mnt/vfs_root";
+            let hostVfsCaptureActive = false;
+            let hostVfsDropProcessing = false;
+
+            function hostHasExternalFiles(event) {
+                const types = Array.from((event.dataTransfer && event.dataTransfer.types) || []);
+                // application/vfs-path は IDE 内部移動。ホストは触らない
+                if (types.includes("application/vfs-path")) return false;
+                return types.includes("Files") || types.includes("public.file-url") || types.includes("text/uri-list");
+            }
+
+            function hostGetVfsZoneScreenRect() {
+                if (!hostVfsZoneRect || !frame) return null;
+                const ir = frame.getBoundingClientRect();
+                return {
+                    left: ir.left + hostVfsZoneRect.left,
+                    top: ir.top + hostVfsZoneRect.top,
+                    right: ir.left + hostVfsZoneRect.left + hostVfsZoneRect.width,
+                    bottom: ir.top + hostVfsZoneRect.top + hostVfsZoneRect.height,
+                    width: hostVfsZoneRect.width,
+                    height: hostVfsZoneRect.height
+                };
+            }
+
+            function hostIsPointInVfsZone(clientX, clientY) {
+                const zone = hostGetVfsZoneScreenRect();
+                if (!zone) return false;
+                return clientX >= zone.left && clientX <= zone.right &&
+                    clientY >= zone.top && clientY <= zone.bottom;
+            }
+
+            function hostPositionVfsOverlay() {
+                const zone = hostGetVfsZoneScreenRect();
+                if (!zone) return;
+                hostVfsDropOverlay.style.left = `${zone.left}px`;
+                hostVfsDropOverlay.style.top = `${zone.top}px`;
+                hostVfsDropOverlay.style.width = `${zone.width}px`;
+                hostVfsDropOverlay.style.height = `${zone.height}px`;
+            }
+
+            function hostStartVfsCapture() {
+                if (!hostVfsZoneRect) return;
+                hostVfsCaptureActive = true;
+                hostPositionVfsOverlay();
+                hostVfsDropOverlay.classList.add("active");
+                // iframe が drop を奪うと sandbox 内で Entry API が失敗するため無効化
+                if (frame) {
+                    frame.style.pointerEvents = "none";
+                }
+            }
+
+            function hostEndVfsCapture() {
+                hostVfsCaptureActive = false;
+                hostVfsDropOverlay.classList.remove("active");
+                hostVfsDropTargetPath = "/mnt/vfs_root";
+                if (frame) {
+                    frame.style.pointerEvents = "";
+                }
+            }
+
+            /**
+             * drop を処理する共通入口。
+             * document キャプチャが先に走るため、二重処理は hostVfsDropProcessing で防ぐ。
+             */
+            function hostOnVfsDropEvent(e) {
+                if (!hostHasExternalFiles(e)) return false;
+                if (!hostIsPointInVfsZone(e.clientX, e.clientY) && e.currentTarget !== hostVfsDropOverlay) {
+                    return false;
+                }
+
+                // ★ 同期区間で必ずスナップショット（await 前）
+                e.preventDefault();
+                e.stopPropagation();
+                const snapshot = hostSnapshotDataTransfer(e.dataTransfer);
+                const targetDir = hostVfsDropTargetPath || "/mnt/vfs_root";
+
+                console.log("# host VFS drop snapshot:", {
+                    items: snapshot.itemCount,
+                    entries: snapshot.entries.length,
+                    handles: snapshot.handlePromises.length,
+                    files: snapshot.fileListCount,
+                    types: snapshot.types,
+                    targetDir
+                });
+
+                hostEndVfsCapture();
+                hostProcessVfsDrop(snapshot, targetDir);
+                return true;
+            }
+
+            /** DirectoryEntry の子を全件取得（readEntries は分割返却） */
+            function hostReadAllDirectoryEntries(directoryEntry) {
+                return new Promise((resolve, reject) => {
+                    const reader = directoryEntry.createReader();
+                    const allEntries = [];
+                    const readBatch = () => {
+                        reader.readEntries((batch) => {
+                            if (!batch || batch.length === 0) {
+                                resolve(allEntries);
+                                return;
+                            }
+                            allEntries.push(...batch);
+                            readBatch();
+                        }, reject);
+                    };
+                    readBatch();
+                });
+            }
+
+            /** 旧 FileSystemEntry から相対パス付きファイルを再帰収集 */
+            async function hostCollectFilesFromEntry(entry, pathPrefix) {
+                const results = [];
+                if (!entry) return results;
+
+                if (entry.isFile) {
+                    const file = await new Promise((resolve, reject) => {
+                        entry.file(resolve, reject);
+                    });
+                    const relativePath = pathPrefix ? `${pathPrefix}/${entry.name}` : entry.name;
+                    results.push({ file, relativePath });
+                    return results;
+                }
+
+                if (entry.isDirectory) {
+                    const nextPrefix = pathPrefix ? `${pathPrefix}/${entry.name}` : entry.name;
+                    let childEntries = [];
+                    try {
+                        childEntries = await hostReadAllDirectoryEntries(entry);
+                    } catch (err) {
+                        console.warn("Host directory read failed:", entry.name, err);
+                        throw err;
+                    }
+                    if (childEntries.length === 0) {
+                        results.push({ file: null, relativePath: nextPrefix, isDirectory: true });
+                        return results;
+                    }
+                    for (const child of childEntries) {
+                        const nested = await hostCollectFilesFromEntry(child, nextPrefix);
+                        results.push(...nested);
+                    }
+                }
+                return results;
+            }
+
+            /** 新 FileSystemHandle から相対パス付きファイルを再帰収集 */
+            async function hostCollectFilesFromHandle(handle, pathPrefix) {
+                const results = [];
+                if (!handle) return results;
+
+                if (handle.kind === "file") {
+                    const file = await handle.getFile();
+                    const relativePath = pathPrefix ? `${pathPrefix}/${handle.name}` : handle.name;
+                    results.push({ file, relativePath });
+                    return results;
+                }
+
+                if (handle.kind === "directory") {
+                    const nextPrefix = pathPrefix ? `${pathPrefix}/${handle.name}` : handle.name;
+                    let childCount = 0;
+                    for await (const [name, child] of handle.entries()) {
+                        childCount++;
+                        const nested = await hostCollectFilesFromHandle(child, nextPrefix);
+                        results.push(...nested);
+                    }
+                    if (childCount === 0) {
+                        results.push({ file: null, relativePath: nextPrefix, isDirectory: true });
+                    }
+                }
+                return results;
+            }
+
+            /**
+             * drop イベントの同期区間で DataTransfer をスナップショットする
+             * （await 後は items/files が空になるブラウザがある）
+             */
+            function hostSnapshotDataTransfer(dataTransfer) {
+                const snapshot = {
+                    entries: [],
+                    handlePromises: [],
+                    files: [],
+                    itemCount: 0,
+                    fileListCount: 0,
+                    types: []
+                };
+                if (!dataTransfer) return snapshot;
+
+                try {
+                    snapshot.types = Array.from(dataTransfer.types || []);
+                } catch (e) { /* ignore */ }
+
+                const items = dataTransfer.items;
+                if (items && items.length > 0) {
+                    snapshot.itemCount = items.length;
+                    for (let i = 0; i < items.length; i++) {
+                        const item = items[i];
+                        if (item.kind && item.kind !== "file") continue;
+
+                        // 1) 旧 Entry API（同期で Entry を取得）
+                        try {
+                            if (typeof item.webkitGetAsEntry === "function") {
+                                const entry = item.webkitGetAsEntry();
+                                if (entry) snapshot.entries.push(entry);
+                            }
+                        } catch (err) {
+                            console.warn("webkitGetAsEntry failed:", err);
+                        }
+
+                        // 2) 新 File System Access API（Promise は同期区間で開始）
+                        try {
+                            if (typeof item.getAsFileSystemHandle === "function") {
+                                snapshot.handlePromises.push(
+                                    item.getAsFileSystemHandle().catch((err) => {
+                                        console.warn("getAsFileSystemHandle failed:", err);
+                                        return null;
+                                    })
+                                );
+                            }
+                        } catch (err) {
+                            console.warn("getAsFileSystemHandle call failed:", err);
+                        }
+
+                        // 3) 単体 File（フォルダの場合は null になりうる）
+                        try {
+                            if (typeof item.getAsFile === "function") {
+                                const file = item.getAsFile();
+                                if (file) snapshot.files.push(file);
+                            }
+                        } catch (err) { /* ignore */ }
+                    }
+                }
+
+                // FileList も同期コピー
+                try {
+                    const fileList = dataTransfer.files;
+                    snapshot.fileListCount = fileList ? fileList.length : 0;
+                    if (fileList && fileList.length > 0) {
+                        for (let i = 0; i < fileList.length; i++) {
+                            snapshot.files.push(fileList[i]);
+                        }
+                    }
+                } catch (err) {
+                    console.warn("dataTransfer.files read failed:", err);
+                }
+
+                return snapshot;
+            }
+
+            /** スナップショットを展開して {file, relativePath}[] にする */
+            async function hostExpandSnapshot(snapshot) {
+                const results = [];
+                const errors = [];
+
+                // A) FileSystemHandle 優先（Chrome/Edge でフォルダ DnD が安定）
+                if (snapshot.handlePromises.length > 0) {
+                    try {
+                        const handles = await Promise.all(snapshot.handlePromises);
+                        for (const handle of handles) {
+                            if (!handle) continue;
+                            const nested = await hostCollectFilesFromHandle(handle, "");
+                            results.push(...nested);
+                        }
+                        if (results.length > 0) {
+                            console.log("# host VFS drop: via FileSystemHandle, count=", results.length);
+                            return results;
+                        }
+                    } catch (err) {
+                        console.warn("Handle expand failed:", err);
+                        errors.push("handle:" + (err.message || err));
+                    }
+                }
+
+                // B) 旧 Entry API
+                if (snapshot.entries.length > 0) {
+                    try {
+                        for (const entry of snapshot.entries) {
+                            const nested = await hostCollectFilesFromEntry(entry, "");
+                            results.push(...nested);
+                        }
+                        if (results.length > 0) {
+                            console.log("# host VFS drop: via Entry API, count=", results.length);
+                            return results;
+                        }
+                    } catch (err) {
+                        console.warn("Entry expand failed:", err);
+                        errors.push("entry:" + (err.message || err));
+                    }
+                }
+
+                // C) File オブジェクト直（フラット。階層は webkitRelativePath があれば維持）
+                const seen = new Set();
+                for (const file of snapshot.files) {
+                    if (!file) continue;
+                    // フォルダ偽ファイルをスキップ
+                    if (!file.type && file.size % 4096 === 0 && file.size <= 4096) continue;
+                    const key = file.name + ":" + file.size + ":" + file.lastModified;
+                    if (seen.has(key)) continue;
+                    seen.add(key);
+                    const relativePath = (file.webkitRelativePath && file.webkitRelativePath.length > 0)
+                        ? file.webkitRelativePath
+                        : file.name;
+                    results.push({ file, relativePath });
+                }
+                if (results.length > 0) {
+                    console.log("# host VFS drop: via File list, count=", results.length);
+                    return results;
+                }
+
+                const detail = [
+                    "items=" + snapshot.itemCount,
+                    "entries=" + snapshot.entries.length,
+                    "handles=" + snapshot.handlePromises.length,
+                    "files=" + snapshot.fileListCount,
+                    "types=" + (snapshot.types || []).join("|"),
+                    errors.length ? ("errors=" + errors.join(";")) : ""
+                ].filter(Boolean).join(", ");
+                throw new Error("No files found in drop. (" + detail + ")");
+            }
+
+            async function hostProcessVfsDrop(snapshot, targetDir) {
+                if (!frame || !frame.contentWindow) return;
+                if (hostVfsDropProcessing) return;
+                hostVfsDropProcessing = true;
+
+                try {
+                    const collected = await hostExpandSnapshot(snapshot);
+                    const payloadFiles = [];
+                    const transferList = [];
+                    for (const entry of collected) {
+                        if (entry.isDirectory) {
+                            payloadFiles.push({
+                                relative_path: entry.relativePath,
+                                is_directory: true
+                            });
+                            continue;
+                        }
+                        if (!entry.file) continue;
+                        const buffer = await entry.file.arrayBuffer();
+                        payloadFiles.push({
+                            relative_path: entry.relativePath,
+                            data: buffer
+                        });
+                        transferList.push(buffer);
+                    }
+
+                    if (payloadFiles.length === 0) {
+                        throw new Error("Collected entries but no writable files.");
+                    }
+
+                    frame.contentWindow.postMessage({
+                        cmd: "vfs_drop_write",
+                        target_dir: targetDir || "/mnt/vfs_root",
+                        files: payloadFiles
+                    }, "*", transferList);
+
+                } catch (err) {
+                    console.error("Host VFS drop failed:", err);
+                    frame.contentWindow.postMessage({
+                        cmd: "vfs_drop_error",
+                        message: String(err.message || err)
+                    }, "*");
+                } finally {
+                    hostVfsDropProcessing = false;
+                }
+            }
+
+            // document キャプチャ: ゾーン上の dragover/drop を確実に拾う
+            document.addEventListener("dragover", (e) => {
+                if (!hostHasExternalFiles(e)) return;
+
+                const inZone = hostIsPointInVfsZone(e.clientX, e.clientY);
+                if (inZone) {
+                    e.preventDefault();
+                    try { e.dataTransfer.dropEffect = "copy"; } catch (err) { /* ignore */ }
+                    hostStartVfsCapture();
+
+                    // IDE にヒットテスト（フォルダ行判定）
+                    if (frame && frame.contentWindow) {
+                        const ir = frame.getBoundingClientRect();
+                        const x = e.clientX - ir.left;
+                        const y = e.clientY - ir.top;
+                        frame.contentWindow.postMessage({ cmd: "vfs_dnd_hit_test", x, y }, "*");
+                    }
+                } else if (hostVfsCaptureActive) {
+                    // ゾーン外へ出たらキャプチャ解除（内部移動や他領域 DnD を妨げない）
+                    // ただし子要素間移動のチラつきを避けるため即時解除はしない
+                }
+            }, true);
+
+            document.addEventListener("drop", (e) => {
+                if (!hostHasExternalFiles(e)) return;
+                if (hostIsPointInVfsZone(e.clientX, e.clientY)) {
+                    hostOnVfsDropEvent(e);
+                    return;
+                }
+                if (hostVfsCaptureActive) {
+                    hostEndVfsCapture();
+                }
+            }, true);
+
+            // オーバーレイ自身でも dragover/drop（キャプチャが取れない場合の保険）
+            hostVfsDropOverlay.addEventListener("dragover", (e) => {
+                if (!hostHasExternalFiles(e)) return;
+                e.preventDefault();
+                e.stopPropagation();
+                try { e.dataTransfer.dropEffect = "copy"; } catch (err) { /* ignore */ }
+                hostPositionVfsOverlay();
+                if (frame && frame.contentWindow) {
+                    const ir = frame.getBoundingClientRect();
+                    frame.contentWindow.postMessage({
+                        cmd: "vfs_dnd_hit_test",
+                        x: e.clientX - ir.left,
+                        y: e.clientY - ir.top
+                    }, "*");
+                }
+            });
+
+            hostVfsDropOverlay.addEventListener("drop", (e) => {
+                // document キャプチャで未処理ならここで処理
+                if (hostVfsDropProcessing) return;
+                hostOnVfsDropEvent(e);
+            });
+
+            document.addEventListener("dragend", () => {
+                hostEndVfsCapture();
+            }, true);
+
+            // ウィンドウリサイズ時にオーバーレイ位置を追従
+            window.addEventListener("resize", () => {
+                if (hostVfsCaptureActive) {
+                    hostPositionVfsOverlay();
+                }
+            });
+
             //-------------------------------------------------------- ### host_frame_post_message_汎用受信 ###
             window.addEventListener("message", async (event) => {
 
@@ -7022,6 +7529,36 @@ ${newRawLog}`;
                 })();
 
                 console.log("# get_post_message #", data);
+
+                //-------------------------------------------------------- ### VFS DnD 制御（IDE → Host）
+                if (event.source === frame.contentWindow && data && typeof data.cmd === "string") {
+                    if (data.cmd === "vfs_drop_zone_rect") {
+                        const r = data.obj || {};
+                        if (typeof r.left === "number" && typeof r.top === "number" &&
+                            typeof r.width === "number" && typeof r.height === "number") {
+                            hostVfsZoneRect = r;
+                            if (hostVfsCaptureActive) {
+                                hostPositionVfsOverlay();
+                            }
+                        }
+                        return;
+                    }
+                    if (data.cmd === "vfs_external_drag_enter") {
+                        // IDE の VFS 上で外部ファイルがドラッグされた → ホスト capture 開始
+                        hostStartVfsCapture();
+                        return;
+                    }
+                    if (data.cmd === "vfs_dnd_target") {
+                        const obj = data.obj || {};
+                        // ヒットテスト結果で書き込み先フォルダを更新
+                        if (obj.in_vfs && obj.path) {
+                            hostVfsDropTargetPath = obj.path;
+                        } else if (obj.in_vfs) {
+                            hostVfsDropTargetPath = "/mnt/vfs_root";
+                        }
+                        return;
+                    }
+                }
 
                 // ブックマークレット連携（外部LLM）からの応答の場合のみ連続エラーを判定
                 if (event.source === window.opener && is_allowed_origin) {
