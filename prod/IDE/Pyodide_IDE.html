@@ -3001,12 +3001,14 @@ setup_web_serial();
                 });
 
                 if (item.type === "folder") {
-                    // Drop Target (フォルダ行へのドロップ)
+                    // Drop Target (フォルダ行へのドロップ: 内部移動 / 外部ファイル追加)
                     row_div.addEventListener("dragover", (e) => {
                         e.preventDefault();
                         e.stopPropagation();
                         row_div.classList.add("vfs_drop_target"); // liではなくrow_divにクラス付与
-                        e.dataTransfer.dropEffect = "move";
+                        // 内部移動は move、OS からの DnD は copy
+                        const is_internal = Array.from(e.dataTransfer.types || []).includes("application/vfs-path");
+                        e.dataTransfer.dropEffect = is_internal ? "move" : "copy";
                     });
 
                     row_div.addEventListener("dragleave", (e) => {
@@ -3015,15 +3017,20 @@ setup_web_serial();
                         row_div.classList.remove("vfs_drop_target");
                     });
 
-                    row_div.addEventListener("drop", (e) => {
+                    row_div.addEventListener("drop", async (e) => {
                         e.preventDefault();
-                        e.stopPropagation();
+                        e.stopPropagation(); // コンテナ側 handle_vfs_drop への二重処理を防止
                         row_div.classList.remove("vfs_drop_target");
 
+                        // 1) VFS 内部の移動（従来動作）
                         const src_path = e.dataTransfer.getData("application/vfs-path");
                         if (src_path) {
                             handle_vfs_move(src_path, item.vfs_path);
+                            return;
                         }
+
+                        // 2) OS からのファイル/フォルダ → このフォルダ配下へ追加
+                        await handle_vfs_drop(e, item.vfs_path);
                     });
 
                     // Context Menu: ZIP Download (Folder)
@@ -3949,40 +3956,208 @@ json.dumps(result)
         }
 
         //-------------------------------------------------------- ### VFS_Drag&Drop_Logic ###
-        async function handle_vfs_drop(event) {
+        /**
+         * DirectoryEntry の子エントリを全件取得する
+         * readEntries は一度に全件を返さないため、空配列になるまで繰り返す
+         */
+        function read_all_directory_entries(directory_entry) {
+            return new Promise((resolve, reject) => {
+                const reader = directory_entry.createReader();
+                const all_entries = [];
+                const read_batch = () => {
+                    reader.readEntries((batch) => {
+                        if (!batch || batch.length === 0) {
+                            resolve(all_entries);
+                            return;
+                        }
+                        all_entries.push(...batch);
+                        read_batch();
+                    }, reject);
+                };
+                read_batch();
+            });
+        }
+
+        /**
+         * FileSystemEntry から相対パス付きファイル一覧を再帰収集する
+         * @returns {Promise<Array<{file: File|null, relative_path: string, is_directory?: boolean}>>}
+         */
+        async function collect_files_from_entry(entry, path_prefix) {
+            const results = [];
+            if (!entry) return results;
+
+            if (entry.isFile) {
+                const file = await new Promise((resolve, reject) => {
+                    entry.file(resolve, reject);
+                });
+                const relative_path = path_prefix ? `${path_prefix}/${entry.name}` : entry.name;
+                results.push({ file, relative_path });
+                return results;
+            }
+
+            if (entry.isDirectory) {
+                const next_prefix = path_prefix ? `${path_prefix}/${entry.name}` : entry.name;
+                let child_entries = [];
+                try {
+                    child_entries = await read_all_directory_entries(entry);
+                } catch (err) {
+                    console.warn("Directory read failed:", entry.name, err);
+                    return results;
+                }
+
+                // 空フォルダも VFS 上に作成できるようマーカーを残す
+                if (child_entries.length === 0) {
+                    results.push({ file: null, relative_path: next_prefix, is_directory: true });
+                    return results;
+                }
+
+                for (const child of child_entries) {
+                    const child_results = await collect_files_from_entry(child, next_prefix);
+                    results.push(...child_results);
+                }
+            }
+            return results;
+        }
+
+        /**
+         * DataTransfer からアップロード対象を収集する
+         * Entry API（階層対応）を優先し、失敗時は files にフォールバック（null origin 対策）
+         */
+        async function collect_dropped_files(data_transfer) {
+            const results = [];
+            if (!data_transfer) return results;
+
+            // --- Entry API 優先（フォルダ単位 DnD の階層維持） ---
+            const items = data_transfer.items;
+            if (items && items.length > 0) {
+                const entry_jobs = [];
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i];
+                    if (item.kind !== "file") continue;
+
+                    let entry = null;
+                    try {
+                        if (typeof item.webkitGetAsEntry === "function") {
+                            entry = item.webkitGetAsEntry();
+                        }
+                    } catch (err) {
+                        // Opaque Origin 等で失敗しうる → files フォールバックへ
+                        console.warn("webkitGetAsEntry failed:", err);
+                    }
+
+                    if (entry) {
+                        entry_jobs.push(collect_files_from_entry(entry, ""));
+                    }
+                }
+
+                if (entry_jobs.length > 0) {
+                    try {
+                        const nested_lists = await Promise.all(entry_jobs);
+                        for (const list of nested_lists) {
+                            results.push(...list);
+                        }
+                        if (results.length > 0) {
+                            return results;
+                        }
+                    } catch (err) {
+                        console.warn("Entry collection failed, fallback to files:", err);
+                        results.length = 0;
+                    }
+                }
+            }
+
+            // --- フォールバック: FileList（フラット配置。階層情報は webkitRelativePath があれば利用） ---
+            const files = data_transfer.files;
+            if (!files || files.length === 0) return results;
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                // File API ではフォルダが 0/4096 バイトの偽ファイルになる場合がある
+                if (!file.type && file.size % 4096 === 0 && file.size <= 4096) {
+                    console.warn("Skipped folder or invalid file:", file.name);
+                    continue;
+                }
+                const relative_path = (file.webkitRelativePath && file.webkitRelativePath.length > 0)
+                    ? file.webkitRelativePath
+                    : file.name;
+                results.push({ file, relative_path });
+            }
+            return results;
+        }
+
+        /**
+         * 収集済みファイルを VFS の target_dir 配下へ書き込む（既存内容は消さない）
+         * @returns {Promise<number>} 書き込んだファイル数
+         */
+        async function write_files_to_vfs(file_entries, target_dir) {
+            if (!pyodide_js.FS.analyzePath(target_dir).exists) {
+                pyodide_js.FS.mkdirTree(target_dir);
+            }
+
+            let count = 0;
+            for (const entry of file_entries) {
+                // 相対パスの正規化と簡易パストラバーサル対策
+                let rel = String(entry.relative_path || "").replace(/\\/g, "/");
+                while (rel.startsWith("/")) rel = rel.slice(1);
+                if (!rel || rel.split("/").includes("..")) {
+                    console.warn("Skipped unsafe path:", entry.relative_path);
+                    continue;
+                }
+
+                const vfs_path = `${target_dir}/${rel}`;
+
+                // 空ディレクトリマーカー
+                if (entry.is_directory) {
+                    try { pyodide_js.FS.mkdirTree(vfs_path); } catch (e) { /* 既存可 */ }
+                    continue;
+                }
+
+                if (!entry.file) continue;
+
+                const dir_name = vfs_path.substring(0, vfs_path.lastIndexOf("/"));
+                if (dir_name) {
+                    pyodide_js.FS.mkdirTree(dir_name);
+                }
+
+                const buffer = await entry.file.arrayBuffer();
+                pyodide_js.FS.writeFile(vfs_path, new Uint8Array(buffer));
+                count++;
+            }
+            return count;
+        }
+
+        /**
+         * VFS への外部 DnD 入口
+         * @param {DragEvent} event
+         * @param {string} [target_dir] 省略時は MOUNT_PATH（コンテナ直下）
+         */
+        async function handle_vfs_drop(event, target_dir) {
             event.preventDefault();
             vfs_container_element.classList.remove("dragover"); // 枠線を消す
 
-            // itemsではなくfilesプロパティを使用し、Opaque Originによるセキュリティエラーを回避
-            const files = event.dataTransfer.files;
-            if (!files || files.length === 0) return;
-
-            toggle_loading(true, "Processing Dropped Files..."); // ローディング表示開始
-
-            js_result_area_element.value = "Processing dropped files...";
-            const mount_point = MOUNT_PATH;
-
-            if (!pyodide_js.FS.analyzePath(mount_point).exists) {
-                pyodide_js.FS.mkdirTree(mount_point);
+            // 内部移動はフォルダ行ハンドラが担当。コンテナに内部 drop が来た場合は無視（従来どおり）
+            const src_path = event.dataTransfer.getData("application/vfs-path");
+            if (src_path) {
+                return;
             }
 
+            const dest_dir = target_dir || MOUNT_PATH;
+
+            toggle_loading(true, "Processing Dropped Files..."); // ローディング表示開始
+            js_result_area_element.value = "Processing dropped files...";
+
             try {
-                let count = 0;
-                for (let i = 0; i < files.length; i++) {
-                    const file = files[i];
-
-                    // 簡易的なフォルダ弾き（File APIではフォルダが0バイトや特定サイズのファイルとして認識される場合があるため）
-                    if (!file.type && file.size % 4096 === 0 && file.size <= 4096) {
-                        console.warn("Skipped folder or invalid file:", file.name);
-                        continue;
-                    }
-
-                    // 階層構造は無視し、ルート直下にファイル名で書き込む
-                    const vfs_path = `${mount_point}/${file.name}`;
-                    const buffer = await file.arrayBuffer();
-                    pyodide_js.FS.writeFile(vfs_path, new Uint8Array(buffer));
-                    count++;
+                const file_entries = await collect_dropped_files(event.dataTransfer);
+                if (!file_entries || file_entries.length === 0) {
+                    js_result_area_element.value = "No files found in drop.";
+                    return;
                 }
+
+                // 既存 VFS 内容は消さず追加書き込み
+                const count = await write_files_to_vfs(file_entries, dest_dir);
+                is_mounted = true; // アップロードボタン経路と状態を揃える
+                mounted_dir_handle = null; // NativeFS ではない
+
                 refresh_vfs_explorer_view();
                 js_result_area_element.value = `Dropped & Uploaded ${count} files.`;
 
@@ -3998,8 +4173,13 @@ json.dumps(result)
             const drop_zone = document.getElementById("vfs_explorer_container");
 
             drop_zone.addEventListener("dragover", (e) => {
-                e.preventDefault();
-                drop_zone.classList.add("dragover");
+                e.preventDefault(); // drop を許可
+                const is_internal = Array.from(e.dataTransfer.types || []).includes("application/vfs-path");
+                // 外部 DnD 時のみコンテナを強調（内部移動はフォルダ行が強調）
+                if (!is_internal) {
+                    drop_zone.classList.add("dragover");
+                    e.dataTransfer.dropEffect = "copy";
+                }
             });
 
             drop_zone.addEventListener("dragleave", (e) => {
@@ -4007,8 +4187,10 @@ json.dumps(result)
                 drop_zone.classList.remove("dragover");
             });
 
-            // コメントアウトを解除し、ドロップイベントを有効化
-            drop_zone.addEventListener("drop", handle_vfs_drop);
+            // コンテナ直下へのドロップ → MOUNT_PATH へ追加
+            drop_zone.addEventListener("drop", (e) => {
+                handle_vfs_drop(e);
+            });
         }
 
         //-------------------------------------------------------- ### VFS_File_mover ###
