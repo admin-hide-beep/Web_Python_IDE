@@ -1,11 +1,10 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pyodide_IDE(v1.12.000)</title>
+    <title>Pyodide_IDE(v1.12.020)</title>
     <link rel="icon" type="image/png" href="favicon.png">
 
     <meta http-equiv="Content-Security-Policy" content="
@@ -2063,17 +2062,30 @@ await main_async_def()
             }
         };
 
+        // アクティブタブから保存用コンテンツを取得（タブ無し時は null）
+        function get_active_tab_save_content() {
+            if (!active_tab_id || !tabs_data[active_tab_id]) {
+                return null;
+            }
+            if (tabs_data[active_tab_id].type === "spreadsheet") {
+                // スプレッドシートの内容をCSV文字列化して取得
+                if (!spreadsheet_instances[active_tab_id]) return null;
+                const sheet_data = spreadsheet_instances[active_tab_id].getData();
+                return sheet_data.map(row => row.join(",")).join("\n");
+            }
+            // エディタモデルが無い（言語未選択の Untitled 等）場合は保存不可
+            if (!editor || !editor.getModel()) {
+                return null;
+            }
+            return editor.getValue();
+        }
+
         // ローカルにファイルを保存する機能
         async function save_file_button_click() {
-            const content = (() => {
-                if (tabs_data[active_tab_id] && tabs_data[active_tab_id].type === "spreadsheet") {
-                    // スプレッドシートの内容をCSV文字列化して取得
-                    const sheet_data = spreadsheet_instances[active_tab_id].getData();
-                    return sheet_data.map(row => row.join(",")).join("\n");
-                } else {
-                    return editor.getValue();
-                }
-            })();
+            const content = get_active_tab_save_content();
+            if (content === null) {
+                return; // タブ無し・未確定タブでは何もしない
+            }
             const blob = new Blob([content], { type: "text/plain" });
             const a = document.createElement("a");
             a.href = URL.createObjectURL(blob);
@@ -2088,15 +2100,10 @@ await main_async_def()
             // Ctrl + S または Cmd + S（Mac）
             if ((e.ctrlKey || e.metaKey) && e.key === "s") {
                 e.preventDefault(); // ブラウザのデフォルト保存を無効化
-                const content = (() => {
-                    if (tabs_data[active_tab_id] && tabs_data[active_tab_id].type === "spreadsheet") {
-                        // スプレッドシートの内容をCSV文字列化して取得
-                        const sheet_data = spreadsheet_instances[active_tab_id].getData();
-                        return sheet_data.map(row => row.join(",")).join("\n");
-                    } else {
-                        return editor.getValue();
-                    }
-                })();
+                const content = get_active_tab_save_content();
+                if (content === null) {
+                    return; // タブ無し・未確定タブでは何もしない
+                }
                 const blob = new Blob([content], { type: "text/plain" });
 
                 const a = document.createElement("a");
@@ -2212,6 +2219,8 @@ await main_async_def()
 
                         // 入力から 300ms 後にアウトライン更新と構文チェック
                         outline_timer = setTimeout(() => {
+                            // タブ閉鎖直後などモデルが無い場合はスキップ
+                            if (!editor.getModel()) return;
                             const code = editor.getValue();
                             analyze_python_code(code);
                         }, 300);
@@ -2635,9 +2644,15 @@ setup_web_serial();
         }
 
         //-------------------------------------------------------- ### Close_Tab ###
+        // 全タブ閉鎖時は自動で新規タブを作らず、タブ無し状態を維持する
+        // （新規タブはユーザーが [+] を明示的に押したときのみ作成）
         function close_tab(tab_id) {
             // Monaco Editor のモデルを破棄（dispose）する
             if (tabs_data[tab_id] && tabs_data[tab_id].model) {
+                // dispose 前にエディタから切り離し、破棄済みモデル参照を防ぐ
+                if (editor && editor.getModel() === tabs_data[tab_id].model) {
+                    editor.setModel(null);
+                }
                 // モデルを破棄することで、アンドゥ履歴や内部データ構造がメモリから解放されます
                 tabs_data[tab_id].model.dispose();
             }
@@ -2668,16 +2683,49 @@ setup_web_serial();
                 if (sheet_div) sheet_div.remove();
             }
 
-            // 5. アクティブだったタブを閉じた場合、別のタブを開く
+            // 5. アクティブだったタブを閉じた場合、別のタブを開く or タブ無し状態へ
             if (active_tab_id === tab_id) {
                 const remaining_ids = Object.keys(tabs_data);
                 if (remaining_ids.length > 0) {
                     // 最後のタブを開く（または隣のタブを開くロジック）
                     activate_tab(remaining_ids[remaining_ids.length - 1]);
                 } else {
-                    // タブがなくなった場合、新規タブを作成
-                    open_tab("Untitled", "");
+                    // タブが0枚: 自動で Untitled を作らず、明示的な [+] 操作まで空状態を維持
+                    clear_editor_area_when_no_tabs();
                 }
+            }
+        }
+
+        // タブが1枚も無いときの表示・状態の後始末
+        function clear_editor_area_when_no_tabs() {
+            active_tab_id = null;
+            file_name_val = null;
+
+            // 言語選択 UI が残っていれば除去
+            const lang_overlay = document.getElementById("lang_select_overlay");
+            if (lang_overlay) lang_overlay.remove();
+            const lang_box = document.getElementById("lang_select_box");
+            if (lang_box) lang_box.remove();
+
+            // プレビュー／プロット／シートは非表示
+            // エディタ領域は display:none にしない（flex:1 の高さが潰れ、結果エリアが上に跳ねるのを防ぐ）
+            if (preview_container_element) preview_container_element.style.display = "none";
+            if (plot_container_element) plot_container_element.style.display = "none";
+            if (spreadsheet_container_element) spreadsheet_container_element.style.display = "none";
+            if (editor_element) editor_element.style.display = "block";
+
+            // エディタからモデルを外し、空のエディタ領域だけ残す
+            if (editor) {
+                editor.setModel(null);
+                // 表示領域を維持したままレイアウトを再計算
+                if (typeof editor.layout === "function") {
+                    editor.layout();
+                }
+            }
+
+            // アウトラインを空にする
+            if (typeof render_outline === "function") {
+                render_outline([]);
             }
         }
 
@@ -3548,6 +3596,11 @@ setup_web_serial();
 
             // エディタの現在の言語モードを確認
             const model = editor.getModel();
+            // タブ無しなどでモデルが無い場合はアウトラインのみクリア
+            if (!model) {
+                render_outline([]);
+                return;
+            }
             const language_id = model.getLanguageId(); // "python", "javascript", "html" 等が返る
 
             // Pythonでない場合は解析を行わず、アウトラインとエラーをクリアして終了
@@ -4313,6 +4366,8 @@ if os.path.exists("${MOUNT_PATH}"):
             try {
                 if (!editor) return;
                 const model = editor.getModel();
+                // タブ無し、または言語未選択の Untitled ではモデルが無い
+                if (!model) return;
                 let code = editor.getValue(); // エディタからコードを取得
                 const lang_id = model.getLanguageId(); // "python", "html", "javascript" 等
 
