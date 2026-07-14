@@ -1403,6 +1403,14 @@
         // type: "local_upload" | "local" | "github" | null
         let scriptExplorerState = { type: null, tree: null };
 
+        //-------------------------------------------------------- ### エクスプローラー展開状態（再描画後も維持）
+        // script: Script_Explorer（local / local_upload / github 共通）
+        // vfs: VFS_Explorer
+        const explorerExpandedPaths = {
+            script: new Set(),
+            vfs: new Set()
+        };
+
         //-------------------------------------------------------- ### 通信ブリッジ用変数
         const pending_host_requests = {}; // 応答待ちのPromiseを管理 { req_id: {resolve, reject} }
 
@@ -2837,6 +2845,100 @@ setup_web_serial();
             target_element.appendChild(rootUl);
         }
 
+        //-------------------------------------------------------- ### 展開状態ヘルパ ###
+        /** type から展開 Set のキーを返す（vfs 以外は script） */
+        function get_explorer_expand_bucket(type) {
+            return type === "vfs" ? "vfs" : "script";
+        }
+
+        /**
+         * フォルダノードの論理パスを取得（展開状態のキー）
+         * @param {object} item
+         * @param {string} type
+         * @returns {string|null}
+         */
+        function get_item_folder_path(item, type) {
+            if (!item) return null;
+            if (type === "vfs") {
+                return (item.vfs_path != null && item.vfs_path !== "") ? item.vfs_path : null;
+            }
+            if (type === "local_upload" || type === "local") {
+                return (item.script_path != null && item.script_path !== "") ? item.script_path : null;
+            }
+            if (type === "github") {
+                // ルートラッパーは path: "" を許容
+                return (item.path != null) ? item.path : null;
+            }
+            // フォールバック
+            if (item.vfs_path) return item.vfs_path;
+            if (item.script_path) return item.script_path;
+            if (item.path != null) return item.path;
+            return null;
+        }
+
+        /** 指定パスが展開中か */
+        function is_folder_expanded(type, path) {
+            if (path == null) return false;
+            return explorerExpandedPaths[get_explorer_expand_bucket(type)].has(path);
+        }
+
+        /** 展開状態を Set に反映する */
+        function set_folder_expanded(type, path, expanded) {
+            if (path == null) return;
+            const bucket = explorerExpandedPaths[get_explorer_expand_bucket(type)];
+            if (expanded) {
+                bucket.add(path);
+            } else {
+                bucket.delete(path);
+            }
+        }
+
+        /**
+         * DnD 移動後に展開パスをリマップする
+         * srcPath → destFolderPath/name および子孫パスを付け替える
+         * @param {"script"|"vfs"} bucketKey
+         * @param {string} srcPath
+         * @param {string} destFolderPath
+         */
+        function remap_explorer_expanded_paths(bucketKey, srcPath, destFolderPath) {
+            if (!srcPath) return;
+            const bucket = explorerExpandedPaths[bucketKey];
+            if (!bucket || bucket.size === 0) return;
+
+            const fileName = srcPath.split("/").filter(Boolean).pop();
+            if (!fileName) return;
+
+            // dest が空（Script ルート）の場合は名前のみ
+            let newBase;
+            if (destFolderPath) {
+                // 末尾スラッシュを正規化
+                const dest = destFolderPath.endsWith("/")
+                    ? destFolderPath.slice(0, -1)
+                    : destFolderPath;
+                newBase = `${dest}/${fileName}`;
+            } else {
+                newBase = fileName;
+            }
+
+            // 自分自身や子孫を含むパスだけ置換
+            const srcPrefix = srcPath.endsWith("/") ? srcPath.slice(0, -1) : srcPath;
+            const next = new Set();
+            for (const path of bucket) {
+                if (path === srcPrefix) {
+                    next.add(newBase);
+                } else if (path.startsWith(srcPrefix + "/")) {
+                    next.add(newBase + path.slice(srcPrefix.length));
+                } else {
+                    next.add(path);
+                }
+            }
+            // 元 Set を差し替え
+            bucket.clear();
+            for (const p of next) {
+                bucket.add(p);
+            }
+        }
+
         //-------------------------------------------------------- ### Script_Explorer 状態ヘルパ ###
         /** Script_Explorer の描画状態を更新して再描画する */
         function set_script_explorer_tree(type, tree) {
@@ -3128,6 +3230,8 @@ setup_web_serial();
 
                 dest_children.push(moving);
                 sort_script_tree_nodes(tree);
+                // 展開状態のパスを移動先に付け替え（再描画前）
+                remap_explorer_expanded_paths("script", src_path, dest);
                 set_script_explorer_tree("local_upload", tree);
                 js_result_area_element.value = `Moved: ${src_path} -> ${dest ? dest + "/" : ""}${file_name}`;
             } catch (err) {
@@ -3506,12 +3610,22 @@ setup_web_serial();
                 const row_div = document.createElement("div");
                 row_div.classList.add("item_row");
                 row_div.textContent = item.name;
+
+                // フォルダの論理パス（展開状態・ホスト DnD 用）
+                const folderPath = (item.type === "folder")
+                    ? get_item_folder_path(item, type)
+                    : null;
+
                 // ホスト側 DnD ヒットテスト用（VFS / Script フォルダ）
                 if (type === "vfs" && item.type === "folder" && item.vfs_path) {
                     row_div.setAttribute("data-vfs-folder-path", item.vfs_path);
                 }
                 if (type === "local_upload" && item.type === "folder" && item.script_path) {
                     row_div.setAttribute("data-script-folder-path", item.script_path);
+                }
+                // 展開状態復元用の汎用パス属性
+                if (folderPath != null) {
+                    row_div.setAttribute("data-folder-path", folderPath);
                 }
                 li.appendChild(row_div);
 
@@ -3522,7 +3636,9 @@ setup_web_serial();
 
                 if (item.type === "folder") {
                     // --- フォルダの場合 ---
-                    li.classList.add("folder-item", "collapsed");
+                    // 保存済み展開状態があれば expanded で復元
+                    const shouldExpand = is_folder_expanded(type, folderPath);
+                    li.classList.add("folder-item", shouldExpand ? "expanded" : "collapsed");
 
                     // クリックイベントは row_div (行部分) に対して設定
                     row_div.addEventListener("click", (e) => {
@@ -3532,6 +3648,10 @@ setup_web_serial();
                         // 親の li のクラスを操作して開閉する
                         li.classList.toggle("expanded");
                         li.classList.toggle("collapsed");
+
+                        // 再描画後も維持できるようメモリ上の Set を更新
+                        const nowExpanded = li.classList.contains("expanded");
+                        set_folder_expanded(type, folderPath, nowExpanded);
                     });
 
                     if (item.children && item.children.length > 0) {
@@ -4922,6 +5042,9 @@ json.dumps(result)
                 // 移動実行
                 pyodide_js.FS.rename(src_path, new_path);
                 console.log(`Moved: ${src_path} -> ${new_path}`);
+
+                // 展開状態のパスを移動先に付け替え（再描画前）
+                remap_explorer_expanded_paths("vfs", src_path, dest_folder_path);
 
                 // ビューを更新
                 refresh_vfs_explorer_view();
