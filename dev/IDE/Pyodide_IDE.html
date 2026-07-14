@@ -373,19 +373,7 @@
                         fill="url(#geminiBrandGradient)" />
                 </svg>
             </button>
-
-            <!-- [GitHub] Gemini Nano 起動ボタンの右隣 -->
-            <button id="github_connect" class="other_button_css" title="GitHub" disabled>
-                <svg viewBox="0 0 16 16" width="18" height="18" fill="currentColor" aria-hidden="true">
-                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
-                        0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52
-                        -.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2
-                        -3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82
-                        .64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12
-                        .51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93
-                        -.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
-                </svg>
-            </button>
+            <!-- GitHub ボタンは Script_Explorer 側（アップロード左）へ移動 -->
             <button id="drive_dir" class="other_button_css" style="display: none;" disabled>Drive_Dir</button>
             <!-- 開発用な為非表示 -->
             <button id="download_html" class="other_button_css" title="Download_html" style="display: none;"
@@ -1088,6 +1076,10 @@
             box-shadow: none; /* ホバー時のボックスシャドウを解除 */
             opacity: 1; /* ホバー時の不透明度: 100% */
 		}
+		/* GitHub ログイン済み時の Script_Explorer ボタン色 */
+		#github_connect.github_logged_in {
+            color: #7dcea0;
+		}
 
 		/* VFS / Script エリアのドラッグオーバー時の視覚効果 */
 		#vfs_explorer_container.dragover,
@@ -1198,6 +1190,18 @@
 										c12.095-12.063,21.22-26.109,27.267-41.031c9.094-22.453,11.344-46.906,6.813-70.328C401.838,246.762,390.4,224.23,372.259,206.168z">
 									</path>
 								</g>
+							</svg>
+						</button>
+						<!-- [GitHub] Script_Explorer アップロード左（ホストへ postMessage で中継） -->
+						<button id="github_connect" class="sidebar_button_css" title="GitHub" style="display: none;" disabled>
+							<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
+								<path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
+									0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52
+									-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2
+									-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82
+									.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12
+									.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93
+									-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
 							</svg>
 						</button>
 						<!-- [⇧] -->
@@ -2203,6 +2207,7 @@ await main_async_def()
             "refresh_script_explorer",
             "refresh_vfs_explorer",
             "reset_vfs_explorer",
+            // github_connect は OAuth 用にスクリプト実行中も有効のままにする（別途管理）
         ];
 
         function set_sidebar_buttons_state(enabled) {
@@ -2211,6 +2216,43 @@ await main_async_def()
                 if (!btn) return;
                 if (enabled) btn.removeAttribute("disabled");
                 else btn.setAttribute("disabled", true);
+            });
+        }
+
+        //-------------------------------------------------------- ### GitHub ボタン（Script_Explorer）UI ###
+        const githubConnectButtonIde = document.getElementById("github_connect");
+
+        /** ホストから通知されたログイン状態をボタン見た目へ反映 */
+        function update_github_connect_button_ui(loggedIn, loginName) {
+            if (!githubConnectButtonIde) return;
+            if (loggedIn) {
+                githubConnectButtonIde.classList.add("github_logged_in");
+                githubConnectButtonIde.title = "GitHub (" + (loginName || "logged in") + ")";
+            } else {
+                githubConnectButtonIde.classList.remove("github_logged_in");
+                githubConnectButtonIde.title = "GitHub";
+            }
+        }
+
+        /**
+         * GitHub 機能の表示・有効化（ホスト注入の githubFeatureEnabled を参照）
+         * 未注入時は false 扱い
+         */
+        function setup_github_connect_button() {
+            if (!githubConnectButtonIde) return;
+            const featureOn = (typeof githubFeatureEnabled !== "undefined" && githubFeatureEnabled === true);
+            if (!featureOn) {
+                githubConnectButtonIde.style.display = "none";
+                githubConnectButtonIde.setAttribute("disabled", true);
+                return;
+            }
+            githubConnectButtonIde.style.display = "";
+            githubConnectButtonIde.removeAttribute("disabled");
+            githubConnectButtonIde.addEventListener("click", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                // OAuth / モーダルはホスト専任。クリックを中継する
+                js_post_message("github_connect_request", "host", "*", {}, []);
             });
         }
 
@@ -3350,6 +3392,8 @@ setup_web_serial();
 
             if (data.cmd === "github_auth_state") {
                 githubLoginName = data.loggedIn ? (data.loginName || null) : null;
+                // Script_Explorer 上の GitHub ボタン見た目を更新
+                update_github_connect_button_ui(!!data.loggedIn, githubLoginName);
                 if (!data.loggedIn) {
                     githubExplorerActive = false;
                     githubRepoContext = null;
@@ -5547,6 +5591,8 @@ sys.stderr = Web_Stdout()
         window.onload = async () => {
 
             try {
+                // GitHub ボタンは Pyodide 非依存のため早期セットアップ
+                setup_github_connect_button();
                 set_sidebar_buttons_state(false);
                 toggle_loading(true); // ローディング表示開始
                 py_result_area_element.value =
@@ -6061,7 +6107,7 @@ sys.stderr = Web_Stdout()
             let githubOAuthState = null;
             let githubOAuthCodeVerifier = null;
 
-            const githubConnectButton = document.getElementById("github_connect");
+            // GitHub 起動ボタンは IDE (Script_Explorer) 側。ホストはモーダルと OAuth のみ担当
             const githubModalOverlay = document.getElementById("github_modal_overlay");
             const githubModalUserRow = document.getElementById("github_modal_user_row");
             const githubRepoSelect = document.getElementById("github_repo_select");
@@ -6354,7 +6400,7 @@ sys.stderr = Web_Stdout()
                 if (githubModalUserRow) {
                     githubModalUserRow.textContent = loggedIn
                         ? ("ログイン中: " + (githubUserLogin || "(unknown)"))
-                        : "未ログイン — ヘッダーの GitHub ボタンから OAuth ログインしてください";
+                        : "未ログイン — Script_Explorer の GitHub ボタンから OAuth ログインしてください";
                 }
                 if (githubRepoSelect) githubRepoSelect.disabled = !loggedIn;
                 if (githubBranchInput) githubBranchInput.disabled = !loggedIn;
@@ -6362,14 +6408,26 @@ sys.stderr = Web_Stdout()
                 if (githubModalOpen) githubModalOpen.disabled = !loggedIn;
                 if (githubModalPush) githubModalPush.disabled = !loggedIn || !githubCurrentRepo;
                 if (githubModalLogout) githubModalLogout.disabled = !loggedIn;
+                // ログイン色は IDE 側ボタンへ github_auth_state で通知（notifyIdeAuthState）
+            }
 
-                if (githubConnectButton) {
-                    if (loggedIn) {
-                        githubConnectButton.classList.add("github_logged_in");
-                        githubConnectButton.title = "GitHub (" + (githubUserLogin || "logged in") + ")";
-                    } else {
-                        githubConnectButton.classList.remove("github_logged_in");
-                        githubConnectButton.title = "GitHub";
+            /**
+             * Script_Explorer の GitHub ボタン押下相当処理（IDE → Host 中継）
+             * 未ログイン: OAuth 開始 / ログイン済: モーダル表示
+             */
+            async function handleGithubConnectRequest() {
+                if (!githubFeatureEnabled) {
+                    postToIdeGithub({ cmd: "github_error", message: "GitHub 機能は現在のホスティングでは無効です。" });
+                    return;
+                }
+                if (!githubAccessToken) {
+                    await startGithubOAuthLogin();
+                } else {
+                    openGithubModal();
+                    try {
+                        await populateRepoSelect();
+                    } catch (err) {
+                        setGithubModalStatus(err.message);
                     }
                 }
             }
@@ -6686,26 +6744,7 @@ sys.stderr = Web_Stdout()
                 }
             }
 
-            // 機能無効時はボタン非表示。有効時は初期 disabled（script_complete で有効化）
-            if (githubConnectButton) {
-                if (!githubFeatureEnabled) {
-                    githubConnectButton.style.display = "none";
-                } else {
-                    githubConnectButton.style.display = "";
-                    githubConnectButton.addEventListener("click", async function () {
-                        if (!githubAccessToken) {
-                            await startGithubOAuthLogin();
-                        } else {
-                            openGithubModal();
-                            try {
-                                await populateRepoSelect();
-                            } catch (err) {
-                                setGithubModalStatus(err.message);
-                            }
-                        }
-                    });
-                }
-            }
+            // GitHub 起動ボタンは IDE の Script_Explorer 側（ホスト注入の githubFeatureEnabled で表示制御）
 
             if (githubModalClose) {
                 githubModalClose.addEventListener("click", closeGithubModal);
@@ -6745,11 +6784,6 @@ sys.stderr = Web_Stdout()
                 });
             }
 
-            // control_button_list に追加（機能有効時のみ）
-            if (githubFeatureEnabled) {
-                control_button_list.push("github_connect");
-            }
-
             console.log("# host_frame_log : githubFeatureEnabled :", githubFeatureEnabled);
 
 
@@ -6786,6 +6820,8 @@ sys.stderr = Web_Stdout()
 		console.log("# IDE_frame_log : dev_flag :", dev_flag, typeof dev_flag);
 		const top_level_flag = ${JSON.stringify(top_level_flag)};
 		console.log("# IDE_frame_log : top_level_flag :", top_level_flag, typeof top_level_flag);
+		const githubFeatureEnabled = ${JSON.stringify(githubFeatureEnabled)};
+		console.log("# IDE_frame_log : githubFeatureEnabled :", githubFeatureEnabled, typeof githubFeatureEnabled);
 	<\/script>
   `;
 
@@ -6798,6 +6834,10 @@ sys.stderr = Web_Stdout()
             frame.onload = () => {
                 loader.style.display = "none";
                 frame.style.display = "block";
+                // IDE 側 GitHub ボタンのログイン色を同期
+                if (typeof notifyIdeAuthState === "function") {
+                    notifyIdeAuthState();
+                }
             };
 
             //-------------------------------------------------------- ### post_message_host_frame_to_ide_frame_クリック送信 ###
@@ -8480,7 +8520,10 @@ ${newRawLog}`;
                     }
                     const gObj = data.obj || {};
                     try {
-                        if (data.cmd === "github_file_request") {
+                        if (data.cmd === "github_connect_request") {
+                            // Script_Explorer の GitHub ボタン押下
+                            await handleGithubConnectRequest();
+                        } else if (data.cmd === "github_file_request") {
                             await handleGithubFileRequest(gObj.path);
                         } else if (data.cmd === "github_push_request") {
                             await handleGithubPushRequest(gObj);
