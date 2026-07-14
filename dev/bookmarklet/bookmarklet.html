@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Step 6: Bidirectional Bridge Bookmarklet (Corrected)</title>
+    <link rel="icon" type="image/png" href="favicon.png">
+
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+            line-height: 1.6;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .bookmarklet {
+            display: inline-block;
+            padding: 15px 30px;
+            background-color: #007acc;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: grab;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: background-color 0.2s;
+        }
+        .bookmarklet:hover {
+            background-color: #005fa3;
+        }
+        textarea {
+            width: 100%;
+            height: 300px;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            background-color: #f9f9f9;
+        }
+        h2 { margin-top: 30px; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Step 6: 双方向通信ブックマークレット (修正版)</h1>
+        <p>Geminiの回答からコマンドJSONのみを抽出し、IDEへの送信またはエラーフィードバックを自動で行います。</p>
+
+        <h2>インストール</h2>
+        <p>以下のボタンをブラウザのブックマークバーにドラッグ＆ドロップしてください。</p>
+        
+        <div style="text-align: center; margin: 30px 0;">
+            <a id="bm-link" href="#" class="bookmarklet">Gemini Bridge v2.1</a>
+        </div>
+
+        <h2>ソースコード確認</h2>
+        <p>ブックマークレットに含まれる実際のコードです（編集可能）。</p>
+        <textarea id="source-code" spellcheck="false"></textarea>
+    </div>
+
+    <script>
+        /* ブックマークレットのソースコード本体 */
+        const bookmarkletCode = `
+(function () {
+    /* 設定と定数 */
+    const IDE_URL = 'https://aki-coding.github.io/Pyodide_Web_IDE/dev/IDE/Pyodide_IDE.html';
+    const CHECK_INTERVAL = 1000;
+    
+    /* フィードバック用メッセージ定数 */
+    const MSG_NO_COMMAND = {
+        "cmd": "No_Command",
+        "message": "出力の中にコマンド無し。意図したものであれば次のステップへ進んでください。意図したものでなければ修正してください。"
+    };
+    const MSG_MULTIPLE_COMMANDS = {
+        "cmd": "Multiple_commands",
+        "message": "システム通知: 複数のコマンド（JSON）が検出されました。一度に実行できるコマンドは一つだけです。順次実行するか、一つに絞ってください。"
+    };
+
+    /* 状態管理変数 */
+    let state = 'UNKNOWN';
+    let ide_window = null;
+    let last_response_len = 0;
+
+    /* --- ユーティリティ関数 --- */
+
+    /* JSON抽出関数: テキストからトップレベルのJSONオブジェクトをリストで抽出 */
+    function extractJsonObjects(text) {
+        const results = [];
+        let braceStack = 0;
+        let startIndex = null;
+        let inString = false;
+        let isEscaped = false;
+
+        for (let i = 0; i < text.length; i++) {
+            const char = text[i];
+            
+            if (inString) {
+                if (isEscaped) {
+                    isEscaped = false;
+                } else if (char === '\\\\') { /* バックスラッシュのエスケープ */
+                    isEscaped = true;
+                } else if (char === '"') {
+                    inString = false;
+                }
+            } else {
+                if (char === '"') {
+                    inString = true;
+                } else if (char === '{') {
+                    if (braceStack === 0) {
+                        startIndex = i;
+                    }
+                    braceStack++;
+                } else if (char === '}') {
+                    if (braceStack > 0) {
+                        braceStack--;
+                        if (braceStack === 0 && startIndex !== null) {
+                            const potentialJson = text.substring(startIndex, i + 1);
+                            try {
+                                /* JSONとして有効かチェック */
+                                JSON.parse(potentialJson);
+                                results.push(potentialJson);
+                            } catch (e) {
+                                console.warn("Gemini Bridge: Invalid JSON block skipped");
+                            }
+                            startIndex = null;
+                        }
+                    }
+                }
+            }
+        }
+        return results;
+    }
+
+    function get_submit_button() {
+        // 最新のUIに合わせ、send-buttonクラスを持つボタン、または既存のaria-labelから取得
+        const btn = document.querySelector('button.send-button') || 
+                    document.querySelector('[aria-label="プロンプトを送信"]');
+        return (btn && btn.offsetParent !== null) ? btn : null;
+    }
+
+    function get_input_area() {
+        // ql-editorクラス（Quillエディタ）を最優先で取得するように改良
+        return document.querySelector('.ql-editor') || 
+               document.querySelector('.ProseMirror') || 
+               document.querySelector('[contenteditable="true"]') || 
+               document.querySelector('textarea'); 
+    }
+
+    /* --- アクション関数 --- */
+
+    function send_to_IDE(jsonText) {
+        if(ide_window) {
+            console.log('Gemini Bridge: Sending JSON to IDE:', jsonText.substring(0, 50) + '...');
+            /* デバッグログ：IDEにGeminiの回答を送ったか */
+            console.log('Gemini Bridge: [Debug] IDEにGeminiの回答（JSON）を送信しました。');
+            ide_window.postMessage({ type: 'GEMINI_RESPONSE', text: jsonText }, '*');
+        } else {
+            console.error('Gemini Bridge: IDE window not found');
+        }
+    }
+
+    function submit_to_gemini(text) {
+        const input = get_input_area();
+        const btn = get_submit_button();
+        if(input && btn) {
+            console.log('Gemini Bridge: Auto-submitting feedback to Gemini...');
+            
+            input.focus();
+            input.textContent = text; 
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            
+            setTimeout(() => {
+                const updatedBtn = get_submit_button();
+                if(updatedBtn) {
+                    updatedBtn.click();
+                    console.log('Gemini Bridge: Clicked submit');
+                    state = 'GENERATING';
+                }
+            }, 500);
+        } else {
+            console.error('Gemini Bridge: Input or Button not found');
+            alert('自動送信エラー: 入力欄または送信ボタンが見つかりません');
+        }
+    }
+
+    /* 回答監視と解析ロジック */
+    function check_response() {
+        const responses = document.querySelectorAll('model-response');
+        if(responses.length > 0) {
+            const lastResponse = responses[responses.length - 1];
+            /* innerTextだとDOM構成の微細な変化を拾いすぎる場合があるため、trim()をかけてクリーンに評価 */
+            const text = lastResponse.innerText.trim();
+            
+            /* 新しい回答が確定した（長さが変わった、または中身が変化した）場合のみ処理 */
+            if (text.length !== last_response_len) {
+                console.log('Gemini Bridge: New response detected. Length:', text.length);
+                last_response_len = text.length;
+
+                /* JSON解析 */
+                const jsonCandidates = extractJsonObjects(text);
+                console.log('Gemini Bridge: Found ' + jsonCandidates.length + ' JSON object(s)');
+
+                if (jsonCandidates.length === 0) {
+                    /* ケース1: 有効なJSONがない -> Geminiへフィードバック */
+                    console.log('Gemini Bridge: No JSON found. Sending feedback.');
+                    submit_to_gemini(JSON.stringify(MSG_NO_COMMAND, null, 4));
+
+                } else if (jsonCandidates.length === 1) {
+                    /* ケース2: JSONが1つだけ -> IDEへ送信 */
+                    console.log('Gemini Bridge: Valid single JSON found. Sending to IDE.');
+                    send_to_IDE(jsonCandidates[0]);
+
+                } else {
+                    /* ケース3: JSONが複数ある -> Geminiへフィードバック */
+                    console.log('Gemini Bridge: Multiple JSONs found. Sending feedback.');
+                    submit_to_gemini(JSON.stringify(MSG_MULTIPLE_COMMANDS, null, 4));
+                }
+            }
+        }
+    }
+
+    /* --- 初期化とメインループ --- */
+
+    console.log('Gemini-IDE Bridge: Initializing...');
+    ide_window = window.open(IDE_URL, 'gemini_ide_window');
+
+    /* IDEからのメッセージ受信 */
+    window.addEventListener('message', (event) => {
+        const data = event.data;
+        console.log('Gemini Bridge: Received message from IDE', data);
+
+        if (data && data.cmd === 'goal_achieved') {
+            alert('目的達成 : ' + data.message);
+
+        } else if (data && data.cmd === 'Notification_completed') {
+            alert('ユーザー検証 : ' + data.message);
+
+        } else {
+            /* 通常の実行結果などはGeminiへそのまま転送 */
+            submit_to_gemini(JSON.stringify(data, null, 4));
+        }
+    });
+
+    const btn = get_submit_button();
+    state = btn ? 'WAITING_FOR_SUBMIT' : 'GENERATING';
+    console.log('Gemini Bridge: Initial state = ' + state);
+
+    /* 状態監視ループ */
+    setInterval(() => {
+        const currentBtn = get_submit_button();
+        
+        // 最新UIでの生成中フラグの判定（ボタンが stop または waiting クラスを持っているか）
+        const is_generating_now = currentBtn ? (currentBtn.classList.contains('stop') || currentBtn.classList.contains('waiting')) : true;
+
+        if(state === 'WAITING_FOR_SUBMIT') {
+            /* 生成開始の検知（ボタンが生成中状態に変わった、またはボタンが一時的に消失した） */
+            if(is_generating_now) {
+                state = 'GENERATING';
+                console.log('Gemini Bridge: Generating... (Debug: 回答生成開始を検知しました)');
+            }
+        } else if(state === 'GENERATING') {
+            /* 生成完了の検知（ボタンが存在し、かつ stop/waiting クラスが外れて通常の送信状態に戻った） */
+            if(currentBtn && !is_generating_now) {
+                state = 'COMPLETE';
+                console.log('Gemini Bridge: Complete (Debug: Geminiの回答終了を検知しました)');
+                setTimeout(() => {
+                    check_response(); /* 生成完了後に解析を実行 */
+                    state = 'WAITING_FOR_SUBMIT';
+                }, 1000); /* DOM更新待ち */
+            }
+        }
+    }, CHECK_INTERVAL);
+
+    alert('Gemini-IDE Bridge Loaded (JSON Parser v2.1)');
+})();
+`;
+
+        // ソースコードを表示
+        document.getElementById('source-code').value = bookmarkletCode.trim();
+
+        // ブックマークレット用リンクの生成（URLエンコード）
+        const link = document.getElementById('bm-link');
+        link.href = 'javascript:' + encodeURIComponent(bookmarkletCode.trim());
+
+        // テキストエリア変更時にリンクを更新（簡易編集機能）
+        document.getElementById('source-code').addEventListener('input', function() {
+            link.href = 'javascript:' + encodeURIComponent(this.value.trim());
+        });
+    </script>
+</body>
+</html>
