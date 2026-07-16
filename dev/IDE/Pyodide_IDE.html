@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pyodide_IDE(v1.12.020)</title>
+    <title>Pyodide_IDE(v1.12.030)</title>
     <link rel="icon" type="image/png" href="favicon.png">
 
     <meta http-equiv="Content-Security-Policy" content="
@@ -19,14 +19,47 @@
     ">
 
     <style id="root_style">
+        /* ### デザイントークン（ホスト UI 共通） ### */
+        :root {
+            --bg-app: #12141a;
+            --bg-panel: #1a1d24;
+            --bg-elevated: #22262f;
+            --bg-input: #161920;
+            --bg-hover: #2a2f3a;
+            --bg-active: #323845;
+            --bg-editor: #1e1e1e;
+            --border-subtle: #2e3440;
+            --border-strong: #3d4555;
+            --text-primary: #e8eaed;
+            --text-secondary: #b0b6c0;
+            --text-muted: #8b929e;
+            --accent: #3d9cf0;
+            --accent-soft: rgba(61, 156, 240, 0.16);
+            --accent-strong: #2b7fd4;
+            --success: #3dba8c;
+            --success-fg: #0c1a14;
+            --danger: #e06c75;
+            --danger-fg: #1f1012;
+            --info: #9cdcfe;
+            --radius-sm: 4px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
+            --shadow-md: 0 12px 40px rgba(0, 0, 0, 0.5);
+            --font-ui: "Segoe UI", "Meiryo UI", system-ui, -apple-system, sans-serif;
+            --transition-fast: 0.15s ease;
+            --header-height: 40px;
+        }
+
         body,
         html {
             margin: 0;
             padding: 0;
             height: 100%;
             overflow: hidden;
-            background-color: #1e1e1e;
-            color: #ccc;
+            background-color: var(--bg-app);
+            color: var(--text-secondary);
+            font-family: var(--font-ui);
         }
 
         body {
@@ -39,15 +72,37 @@
             flex: 1;
             border: none;
             display: block;
+            background: var(--bg-editor);
         }
 
+        /* 初期ローダー */
         #loader {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            font-family: sans-serif;
+            font-family: var(--font-ui);
             text-align: center;
+            color: var(--text-secondary);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+            z-index: 50;
+        }
+
+        #loader::before {
+            content: "";
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 3px solid var(--border-strong);
+            border-top-color: var(--accent);
+            animation: host_spin 0.85s linear infinite;
+        }
+
+        @keyframes host_spin {
+            to { transform: rotate(360deg); }
         }
 
         #main_wrapper {
@@ -56,6 +111,7 @@
             width: 100%;
             min-height: 0;
             overflow: hidden;
+            background: var(--bg-app);
         }
 
         /* VFS 外部 DnD 用: ホスト側オーバーレイ（sandbox では Entry API 不可のためホストが受ける） */
@@ -64,23 +120,26 @@
             position: fixed;
             z-index: 100000;
             box-sizing: border-box;
-            border: 2px dashed #888;
-            background-color: rgba(68, 68, 68, 0.35);
+            border: 2px dashed var(--accent);
+            background-color: var(--accent-soft);
+            border-radius: var(--radius-md);
             pointer-events: none;
         }
+
         #host_vfs_drop_overlay.active {
             display: block;
             pointer-events: auto; /* active 時のみ drop を受け取る */
         }
 
+        /* ### AI サイドバー ### */
         .ai_sidebar_css {
             width: 350px;
-            background-color: #252526;
-            border-left: 1px solid #333;
+            background-color: var(--bg-panel);
+            border-left: 1px solid var(--border-subtle);
             display: flex;
             flex-direction: column;
-            color: #fff;
-            font-family: sans-serif;
+            color: var(--text-primary);
+            font-family: var(--font-ui);
             flex-shrink: 0;
         }
 
@@ -89,124 +148,345 @@
         }
 
         #ai_sidebar_resizer_v {
-            width: 5px; /* リサイザーの幅 */
-            cursor: ew-resize; /* 左右リサイズのカーソル表示 */
-            background-color: #444; /* バーの背景色 */
-            height: 100%; /* 高さいっぱいまで伸ばす */
-            flex-shrink: 0; /* レイアウト崩れによる潰れ防止 */
+            width: 5px;
+            cursor: ew-resize;
+            background-color: transparent;
+            border-left: 1px solid var(--border-subtle);
+            height: 100%;
+            flex-shrink: 0;
+            transition: background-color var(--transition-fast), border-color var(--transition-fast);
+        }
+
+        #ai_sidebar_resizer_v:hover {
+            background-color: var(--accent-soft);
+            border-left-color: var(--accent);
         }
 
         body.ai-sidebar-hidden #ai_sidebar_resizer_v {
-            display: none; /* AIサイドバー非表示時はリサイザーも隠す */
+            display: none;
+        }
+
+        /* AI ヘッダー */
+        .nano_header {
+            padding: 10px 12px;
+            font-weight: 600;
+            border-bottom: 1px solid var(--border-subtle);
+            font-size: 12px;
+            letter-spacing: 0.02em;
+            background-color: var(--bg-elevated);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .nano_header_actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #nano-status {
+            font-size: 10px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        #nano-reset-btn {
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 11pt;
+            padding: 4px 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--radius-sm);
+            transition: color var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast);
+        }
+
+        #nano-reset-btn:hover {
+            color: var(--text-primary);
+            background: var(--bg-hover);
+            border-color: var(--border-subtle);
+        }
+
+        /* チャット領域 */
+        #nano-chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            font-size: 13px;
+            background: var(--bg-panel);
+            min-height: 0;
+        }
+
+        #nano-chat-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #nano-chat-container::-webkit-scrollbar-thumb {
+            background: var(--border-strong);
+            border-radius: 3px;
+        }
+
+        /* チャット吹き出し（共通） */
+        .nano-msg {
+            padding: 9px 12px;
+            border-radius: 10px;
+            max-width: 88%;
+            white-space: pre-wrap;
+            word-break: break-word;
+            line-height: 1.45;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .nano-msg-ai,
+        .nano-msg-hint {
+            background-color: var(--bg-elevated);
+            color: var(--text-secondary);
+            align-self: flex-start;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .nano-msg-user {
+            background-color: var(--accent);
+            color: #fff;
+            align-self: flex-end;
+            border: 1px solid transparent;
+        }
+
+        .nano-msg-system {
+            background-color: var(--bg-active);
+            color: var(--text-primary);
+            align-self: flex-start;
+            border-left: 3px solid var(--success);
+            border-radius: 4px 10px 10px 4px;
+        }
+
+        .nano-msg-summary {
+            background-color: var(--bg-elevated);
+            color: #8ab4f8;
+            align-self: flex-start;
+            border-left: 3px solid #b48ead;
+            border-radius: 4px 10px 10px 4px;
+        }
+
+        /* 入力エリア */
+        #nano-input-container {
+            padding: 10px 12px 12px;
+            border-top: 1px solid var(--border-subtle);
+            background-color: var(--bg-elevated);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        #nano-mode-container {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: var(--text-muted);
+            user-select: none;
+            flex-wrap: wrap;
+        }
+
+        #nano-mode-container input[type="checkbox"],
+        #nano-mode-container label {
+            cursor: pointer;
+        }
+
+        #nano-mode-container label {
+            margin-right: 4px;
+        }
+
+        #nano-lang-select {
+            margin-left: auto;
+            background-color: var(--bg-input);
+            color: var(--text-primary);
+            border: 1px solid var(--border-strong);
+            border-radius: var(--radius-sm);
+            font-size: 11px;
+            padding: 3px 6px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        #nano-lang-select:focus {
+            border-color: var(--accent);
+        }
+
+        #nano-chat-input-box {
+            display: flex;
+            gap: 8px;
+            align-items: stretch;
+        }
+
+        #nano-user-input {
+            flex: 1;
+            height: 36px;
+            padding: 8px 10px;
+            background-color: var(--bg-input);
+            color: var(--text-primary);
+            border: 1px solid var(--border-strong);
+            border-radius: var(--radius-md);
+            resize: none;
+            outline: none;
+            font-size: 13px;
+            font-family: var(--font-ui);
+            transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+        }
+
+        #nano-user-input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px var(--accent-soft);
+        }
+
+        #nano-send-btn {
+            padding: 0 14px;
+            background-color: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background-color var(--transition-fast), opacity var(--transition-fast);
+            white-space: nowrap;
+        }
+
+        #nano-send-btn:hover:not(:disabled) {
+            background-color: var(--accent-strong);
+        }
+
+        #nano-send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* キーボードフォーカス可視化 */
+        button:focus-visible,
+        input:focus-visible,
+        select:focus-visible,
+        textarea:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
         }
     </style>
 
     <style id="header_style">
         header {
-            /* ヘッダーのスタイル */
-            background-color: #333;
-            /* 背景色: やや暗いグレー */
-            padding: 4px 5px;
-            /* 内部パディング (上下4px, 左右5px) */
+            background-color: var(--bg-elevated);
+            border-bottom: 1px solid var(--border-subtle);
+            padding: 6px 10px;
             display: flex;
-            /* Flexboxコンテナとして設定 */
             justify-content: space-between;
-            /* 子要素 (ボタンとステータス) を両端に配置 */
             align-items: center;
-            /* 子要素を垂直方向の中央に揃える */
             flex-shrink: 0;
-            /* 縮小を禁止（高さ固定） */
             position: relative;
-            /* z-indexを効かせるために必要 */
             z-index: 10000;
-            /* Z軸の深さ: ローディングオーバーレイ (9999) より前面に表示 */
+            min-height: var(--header-height);
+            box-sizing: border-box;
         }
 
+        #buttons {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        /* ヘッダーボタン共通 */
         .other_button_css,
         .run_button_css,
         .stop_button_css {
-            /* ヘッダーボタンの共通スタイル */
-            width: 35px;
-            /* 幅: 35px */
-            height: 25px;
-            /* 高さ: 25px */
-            border-radius: 5%;
-            /* 角丸: 5% */
+            width: 34px;
+            height: 28px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-subtle);
             font-size: 10pt;
-            /* フォントサイズ: 10pt */
             text-align: center;
-            /* テキストを中央揃え */
             cursor: pointer;
-            /* カーソル: ポインター */
-            margin-right: 3px;
-            /* 右マージン: 3px */
-            line-height: 1em;
-            /* 行の高さ: 親要素と同じ */
-            opacity: 0.9;
-            /* 不透明度: 90% */
-            transition: .3s;
-            /* トランジション: 0.3秒 */
-            box-shadow: 2px 2px 1px rgba(0, 0, 0, 0.3);
-            /* ボックスシャドウ */
-            /* ...既存のプロパティ... */
+            margin-right: 0;
+            opacity: 1;
+            transition: background-color var(--transition-fast), border-color var(--transition-fast), opacity var(--transition-fast), transform 0.1s ease;
             display: inline-flex;
-            /* inline-block から変更: SVGを中央配置しやすくするため */
             align-items: center;
-            /* 垂直中央 */
             justify-content: center;
-            /* 水平中央 */
             line-height: 0;
-            /* 既存の 1em から 0 に変更してテキスト用の余白を消す */
             vertical-align: middle;
-            /* テキスト有無による高さズレを解消 */
+            box-shadow: none;
         }
 
-        .other_button_css:hover,
-        .run_button_css:hover,
-        .stop_button_css:hover {
-            box-shadow: none;
-            /* ホバー時のボックスシャドウを解除 */
+        .other_button_css:hover:not(:disabled),
+        .run_button_css:hover:not(:disabled),
+        .stop_button_css:hover:not(:disabled) {
             opacity: 1;
-            /* ホバー時の不透明度: 100% */
+            transform: translateY(-1px);
+        }
+
+        .other_button_css:disabled,
+        .run_button_css:disabled,
+        .stop_button_css:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
         }
 
         .other_button_css {
-            /* ヘッダーの一般ボタンのスタイル */
-            background: rgba(40, 40, 40, 1);
-            /* 背景色: 暗いグレー (不透明) */
-            color: rgba(210, 210, 210, 1);
-            /* 文字色: 白 */
+            background: var(--bg-input);
+            color: var(--text-secondary);
+        }
+
+        .other_button_css:hover:not(:disabled) {
+            background: var(--bg-hover);
+            border-color: var(--border-strong);
+            color: var(--text-primary);
         }
 
         .run_button_css {
-            /* ヘッダーの実行ボタンのスタイル */
-            background: rgba(120, 200, 180, 1);
-            /* 背景色: 緑がかった青 (不透明) */
-            color: rgba(50, 50, 50, 1);
-            /* 文字色: 白 */
+            background: var(--success);
+            color: var(--success-fg);
+            border-color: transparent;
+        }
+
+        .run_button_css:hover:not(:disabled) {
+            filter: brightness(1.08);
         }
 
         .stop_button_css {
-            /* ヘッダーの実行ボタンのスタイル */
-            background: rgba(217, 83, 79, 1);
-            /* 背景色: 緑がかった青 (不透明) */
-            color: rgba(50, 50, 50, 1);
-            /* 文字色: 白 */
+            background: var(--danger);
+            color: var(--danger-fg);
+            border-color: transparent;
+        }
+
+        .stop_button_css:hover:not(:disabled) {
+            filter: brightness(1.08);
         }
 
         .other_selector_css,
         .other_input_css {
-            border: 1px solid #555;
-            border-radius: 5%;
-            /* 角丸: 5% */
-            font-size: 10pt;
-            /* フォントサイズ: 10pt */
-            background: rgba(40, 40, 40, 1);
-            /* 背景色: 暗いグレー (不透明) */
-            color: rgba(255, 255, 255, 1);
-            /* 文字色: 白 */
-            padding: 2px 3px;
-            /* 内部パディング (上下2px, 左右3px) */
+            border: 1px solid var(--border-strong);
+            border-radius: var(--radius-sm);
+            font-size: 11px;
+            background: var(--bg-input);
+            color: var(--text-primary);
+            padding: 4px 6px;
+            height: 28px;
+            box-sizing: border-box;
+            font-family: var(--font-ui);
+            transition: border-color var(--transition-fast);
+        }
+
+        .other_input_css:focus {
+            border-color: var(--accent);
+            outline: none;
         }
 
         /* ### GitHub 連携モーダル ### */
@@ -214,10 +494,11 @@
             display: none;
             position: fixed;
             inset: 0;
-            background: rgba(0, 0, 0, 0.55);
+            background: rgba(8, 10, 14, 0.72);
             z-index: 10000;
             align-items: center;
             justify-content: center;
+            backdrop-filter: blur(2px);
         }
 
         #github_modal_overlay.github_modal_visible {
@@ -228,29 +509,32 @@
             width: min(480px, 92vw);
             max-height: 80vh;
             overflow: auto;
-            background: #2d2d2d;
-            border: 1px solid #555;
-            border-radius: 8px;
-            padding: 16px 18px;
-            color: #ddd;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 18px 20px;
+            color: var(--text-secondary);
+            box-shadow: var(--shadow-md);
             font-size: 13px;
+            font-family: var(--font-ui);
         }
 
         #github_modal h2 {
-            margin: 0 0 10px 0;
+            margin: 0 0 12px 0;
             font-size: 16px;
-            color: #fff;
+            font-weight: 600;
+            color: var(--text-primary);
+            letter-spacing: 0.01em;
         }
 
         #github_modal .github_modal_row {
-            margin: 8px 0;
+            margin: 10px 0;
         }
 
         #github_modal label {
             display: block;
-            margin-bottom: 4px;
-            color: #aaa;
+            margin-bottom: 5px;
+            color: var(--text-muted);
             font-size: 12px;
         }
 
@@ -258,31 +542,44 @@
         #github_modal input[type="text"] {
             width: 100%;
             box-sizing: border-box;
-            background: #1e1e1e;
-            color: #eee;
-            border: 1px solid #555;
-            border-radius: 4px;
-            padding: 6px 8px;
+            background: var(--bg-input);
+            color: var(--text-primary);
+            border: 1px solid var(--border-strong);
+            border-radius: var(--radius-md);
+            padding: 8px 10px;
+            font-family: var(--font-ui);
+            transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+        }
+
+        #github_modal select:focus,
+        #github_modal input[type="text"]:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px var(--accent-soft);
+            outline: none;
         }
 
         #github_modal .github_modal_actions {
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
-            margin-top: 14px;
+            margin-top: 16px;
         }
 
         #github_modal .github_modal_actions button {
-            background: #3a3a3a;
-            color: #eee;
-            border: 1px solid #666;
-            border-radius: 4px;
-            padding: 6px 12px;
+            background: var(--bg-hover);
+            color: var(--text-primary);
+            border: 1px solid var(--border-strong);
+            border-radius: var(--radius-md);
+            padding: 7px 14px;
             cursor: pointer;
+            font-family: var(--font-ui);
+            font-size: 13px;
+            transition: background-color var(--transition-fast), border-color var(--transition-fast);
         }
 
         #github_modal .github_modal_actions button:hover:not(:disabled) {
-            background: #4a4a4a;
+            background: var(--bg-active);
+            border-color: var(--border-strong);
         }
 
         #github_modal .github_modal_actions button:disabled {
@@ -291,20 +588,27 @@
         }
 
         #github_modal .github_modal_actions button.github_primary {
-            background: #2d6a4f;
-            border-color: #40916c;
+            background: var(--success);
+            border-color: transparent;
+            color: var(--success-fg);
+            font-weight: 600;
+        }
+
+        #github_modal .github_modal_actions button.github_primary:hover:not(:disabled) {
+            filter: brightness(1.08);
         }
 
         #github_modal #github_modal_status {
-            margin-top: 10px;
+            margin-top: 12px;
             min-height: 1.2em;
-            color: #9cdcfe;
+            color: var(--info);
             white-space: pre-wrap;
             word-break: break-word;
+            font-size: 12px;
         }
 
         #github_connect.github_logged_in {
-            color: #7dcea0;
+            color: var(--success);
         }
     </style>
 
@@ -343,7 +647,7 @@
     </div>
 
     <div id="loader">
-        <div>Initializing Sandbox...</div>
+        <div>Initializing Sandbox…</div>
     </div>
 
     <header>
@@ -489,11 +793,11 @@
 
         <div id="ai_sidebar_resizer_v"></div>
         <div id="ai_sidebar" class="ai_sidebar_css">
-            <div style="padding: 10px; font-weight: bold; border-bottom: 1px solid #333; font-size: 11pt; background-color: #333; display: flex; justify-content: space-between; align-items: center;">
+            <div class="nano_header">
                 <span>AI Chat (Gemini Nano)</span>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <span id="nano-status" style="font-size: 8pt; color: #aaa;">未起動</span>
-                    <button id="nano-reset-btn" title="セッションリセット" style="background: none; border: none; color: #aaa; cursor: pointer; font-size: 11pt; padding: 2px 5px; display: flex; align-items: center; justify-content: center; transition: color 0.2s;">
+                <div class="nano_header_actions">
+                    <span id="nano-status">未起動</span>
+                    <button id="nano-reset-btn" title="セッションリセット" type="button">
                         <svg viewBox="0 0 512 512" width="14" height="14" fill="currentColor">
                             <g>
                                 <path class="st0" d="M499.795,195.596c-11.804-27.884-31.438-51.515-56.186-68.24c-24.717-16.724-54.739-26.526-86.773-26.518
@@ -519,21 +823,21 @@
                     </button>
                 </div>
             </div>
-            <div id="nano-chat-container" style="flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 10px; font-size: 10pt;">
-                <div style="background-color: #333; padding: 8px 12px; border-radius: 4px; align-self: flex-start; max-width: 85%; color: #ccc;">
+            <div id="nano-chat-container">
+                <div class="nano-msg nano-msg-hint">
                     You can launch Gemini nano and chat using the button below.
                 </div>
-                <div style="background-color: #333; padding: 8px 12px; border-radius: 4px; align-self: flex-start; max-width: 85%; color: #ccc;">
+                <div class="nano-msg nano-msg-hint">
                     下のボタンから Gemini nano を起動し、チャット出来ます
                 </div>
             </div>
-            <div id="nano-input-container" style="padding: 10px; border-top: 1px solid #333; background-color: #1e1e1e; display: flex; flex-direction: column; gap: 8px;">
-                <div id="nano-mode-container" style="display: flex; align-items: center; gap: 6px; font-size: 9pt; color: #aaa; user-select: none; margin-bottom: -2px;">
-                    <input type="checkbox" id="nano-agent-toggle" checked style="cursor: pointer;">
-                    <label for="nano-agent-toggle" style="cursor: pointer;">🤖Agentic</label>
-                    <input type="checkbox" id="nano-summary-toggle" style="cursor: pointer;">
-                    <label for="nano-summary-toggle" style="cursor: pointer;">📝Summarizer</label>
-                    <select id="nano-lang-select" style="margin-left: auto; background-color: #2d2d2d; color: white; border: 1px solid #555; border-radius: 4px; font-size: 9pt; padding: 2px; outline: none; cursor: pointer;">
+            <div id="nano-input-container">
+                <div id="nano-mode-container">
+                    <input type="checkbox" id="nano-agent-toggle" checked>
+                    <label for="nano-agent-toggle">🤖Agentic</label>
+                    <input type="checkbox" id="nano-summary-toggle">
+                    <label for="nano-summary-toggle">📝Summarizer</label>
+                    <select id="nano-lang-select">
                         <option value="auto">🌐 auto</option>
                         <option value="ja">ja</option>
                         <option value="en">en</option>
@@ -541,9 +845,9 @@
                         <option value="fr">fr</option>
                     </select>
                 </div>
-                <div id="nano-chat-input-box" style="display: flex; gap: 6px;">
-                    <textarea id="nano-user-input" placeholder="指令を入力... (Enterで送信)" style="flex: 1; height: 32px; padding: 6px; background-color: #2d2d2d; color: white; border: 1px solid #555; border-radius: 4px; resize: none; outline: none; font-size: 10pt;"></textarea>
-                    <button id="nano-send-btn" style="padding: 0 12px; background-color: #007acc; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer;">送信</button>
+                <div id="nano-chat-input-box">
+                    <textarea id="nano-user-input" placeholder="指令を入力... (Enterで送信)"></textarea>
+                    <button id="nano-send-btn" type="button">送信</button>
                 </div>
             </div>
         </div>
@@ -580,167 +884,173 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsuites@4.3.2/dist/jsuites.min.css" integrity="sha512-gRz/VtWpNeHxUiebwfBf1rSAYm1ABWaZ3an3GA6PdY3Gfj4b+8jP6XMas7ZTqMDFB6RaoHi41gefhV5PATBaWw==" crossorigin="anonymous">
 
     <style id="body_style">
+		/* ### デザイントークン（sandbox IDE 側） ### */
+		:root {
+            --bg-app: #12141a;
+            --bg-panel: #1a1d24;
+            --bg-elevated: #22262f;
+            --bg-input: #161920;
+            --bg-hover: #2a2f3a;
+            --bg-active: #323845;
+            --bg-editor: #1e1e1e;
+            --border-subtle: #2e3440;
+            --border-strong: #3d4555;
+            --text-primary: #e8eaed;
+            --text-secondary: #b0b6c0;
+            --text-muted: #8b929e;
+            --accent: #3d9cf0;
+            --accent-soft: rgba(61, 156, 240, 0.16);
+            --accent-strong: #2b7fd4;
+            --success: #3dba8c;
+            --danger: #e06c75;
+            --radius-sm: 4px;
+            --radius-md: 8px;
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
+            --font-ui: "Segoe UI", "Meiryo UI", system-ui, -apple-system, sans-serif;
+            --transition-fast: 0.15s ease;
+		}
+
 		/* ### Base Layout (基本レイアウト) ### */
 		body {
-            background-color: rgb(25, 25, 25); /* 背景色: 暗いグレー */
-            color: white; /* 文字色: 白 */
-            font-family: "Segoe UI", "Meiryo UI", sans-serif; /* フォント設定 */
-            margin: 0; /* 余白をリセット (外側のスペース) */
-            padding: 0; /* パディングをリセット (内側のスペース) */
-            display: flex; /* Flexboxコンテナとして設定 */
-            flex-direction: column; /* 子要素を縦方向に配置 (header, container, footer) */
-            height: 100vh; /* 高さ: ビューポートの高さに合わせる */
-            overflow: hidden; /* はみ出したコンテンツを非表示 (全体スクロールを禁止) */
+            background-color: var(--bg-app);
+            color: var(--text-primary);
+            font-family: var(--font-ui);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
 		}
 		#container {
-            /* メインコンテナ（サイドバーとメインコンテンツを横並びにする） */
-            display: flex; /* Flexboxコンテナとして設定 */
-            flex: 1; /* 拡大率: 1 (残りの垂直スペースを全て使用) */
-            overflow: hidden; /* はみ出しを隠す */
+            display: flex;
+            flex: 1;
+            overflow: hidden;
 		}
 		footer {
-            /* フッター（実行結果エリア）のスタイル */
-            height: 25%; /* 初期高さ: 25% */
-            background-color: #333; /* 背景色: やや暗いグレー */
-            display: flex; /* Flexboxコンテナとして設定 */
-            flex-direction: column; /* 子要素を縦方向に配置 */
-            padding: 0px 0px; /* 内部パディング */
-            box-sizing: border-box; /* ボックスサイズ計算: パディングを高さに含める */
-            flex-shrink: 0; /* 縮小を禁止（高さ固定） */
-            width: 100%; /* 幅: 100% (幅いっぱい) */
+            height: 25%;
+            background-color: var(--bg-panel);
+            display: flex;
+            flex-direction: column;
+            padding: 0;
+            box-sizing: border-box;
+            flex-shrink: 0;
+            width: 100%;
+            border-top: 1px solid var(--border-subtle);
 		}
 
 		/* ### Footer Elements (フッター内の要素) ### */
 		#footer_area_container {
-            /* フッター内部のエリアコンテナ（結果エリアとプロットエリアを横並びにする） */
-            display: flex; /* Flexboxコンテナとして設定 (子要素を横並びに配置) */
-            flex: 1; /* 拡大率: 1 (縦方向の残りのスペースを全て使用) */
-            gap: 0px; /* アイテム間の隙間: 5px */
-            min-height: 0; /* 最小高さ: 0 (flexアイテムとしての高さの最小値を確保) */
+            display: flex;
+            flex: 1;
+            gap: 0;
+            min-height: 0;
+            padding: 6px;
+            box-sizing: border-box;
+		}
+		#py_result_area,
+		#js_result_area,
+		#extension_area {
+            padding: 8px 10px;
+            background: var(--bg-editor);
+            color: var(--text-primary);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            font-size: 13px;
+            overflow: auto;
+            resize: none;
+            box-sizing: border-box;
+            min-width: 50px;
 		}
 		#py_result_area {
-            /* Pythonの実行結果（標準出力）表示エリア */
-            flex: 6 1 0%; /* 拡大:0, 縮小:0, 基準サイズ:auto (サイズ固定) */
-            padding: 1% 1%; /* 内部パディング (上下1%, 左右5%) */
-            background: rgb(30, 30, 30); /* 背景色: 暗いグレー */
-            color: rgb(250, 250, 250); /* 文字色: 非常に明るいグレー */
-            border: 1px solid #555; /* 境界線: 1px 濃いグレーの実線 */
-            border-radius: 4px; /* 角丸: 4px */
-            font-size: 14px; /* フォントサイズ: 14px */
-            overflow: auto; /* はみ出し処理: コンテンツがはみ出たらスクロール可能に */
-            resize: none; /* 手動リサイズ禁止 */
-            box-sizing: border-box; /* パディングと境界線を幅と高さに含める */
-            min-width: 50px; /* 最小幅: 50px */
+            flex: 6 1 0%;
 		}
 		#js_result_area {
-            /* JavaScriptの実行結果（ログなど）表示エリア */
-            flex: 3 1 0%; /* 拡大:0, 縮小:0, 基準サイズ:auto (サイズ固定) */
-            padding: 1% 1%; /* 内部パディング (上下1%, 左右5%) */
-            background: rgb(30, 30, 30); /* 背景色: 暗いグレー */
-            color: rgb(250, 250, 250); /* 文字色: 非常に明るいグレー */
-            border: 1px solid #555; /* 境界線: 1px 濃いグレーの実線 */
-            border-radius: 4px; /* 角丸: 4px */
-            font-size: 14px; /* フォントサイズ: 14px */
-            overflow: auto; /* はみ出し処理: コンテンツがはみ出たらスクロール可能に */
-            resize: none; /* 手動リサイズ禁止 */
-            box-sizing: border-box; /* パディングと境界線を幅と高さに含める */
-            min-width: 50px; /* 最小幅: 50px */
+            flex: 3 1 0%;
 		}
 		#extension_area {
-            /* グラフ/プロット表示エリア */
-            flex: 3 1 0%; /* 拡大:0, 縮小:0, 基準サイズ:auto (サイズ固定) */
-            padding: 0.5% 0.5%; /* 内部パディング */
-            background: rgb(30, 30, 30); /* 背景色: 黒系の色に変更 */
-            color: rgb(250, 250, 250); /* 文字色: 白 */
-            border: 1px solid #555; /* 境界線: 1px 濃いグレーの実線 */
-            border-radius: 4px; /* 角丸: 4px */
-            /* font-size: 14px; /* フォントサイズ: 14px */
-            overflow: auto; /* はみ出し処理: コンテンツがはみ出たらスクロール可能に */
-            box-sizing: border-box; /* パディングと境界線を幅と高さに含める */
-            min-width: 50px; /* 最小幅: 50px */
-            height: 100%; /* 親要素の高さに強制的に合わせる */
-            /* min-height: 0; /* Flexboxの子要素による親要素の高さ押し広げを防ぎ、overflowを有効にする */
-            display: flex; /* Flexboxコンテナとして設定 */
-            flex-direction: column; /* 子要素を縦方向に配置 */
-            align-items: center; /* 子要素を水平方向の中央に揃える (画像を中央寄せ) */
+            flex: 3 1 0%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
 		}
 		#extension_area img {
-            /* プロットエリア内の画像 */
-            max-width: 100%; /* 最大幅: 親要素の幅からはみ出さない */
-            margin-bottom: 10px; /* 下部マージン */
-            /* box-shadow: 2px 2px 5px rgba(0,0,0,0.2); /* ボックスシャドウ: x:2px, y:2px, ぼかし:5px, 色:黒(透明度0.2) */
+            max-width: 100%;
+            margin-bottom: 10px;
+            border-radius: var(--radius-sm);
 		}
 
 		/* ### Vertical Resizer (フッター内の垂直リサイズバー) ### */
-		#output_resizer_v {
-            /* py_result_area <-> js_result_area のリサイズバー */
-            width: 5px; /* 幅: 5px */
-            cursor: ew-resize; /* カーソル: 左右リサイズカーソル */
-            background-color: #444; /* 背景色: 濃いグレー */
-            height: 100%; /* 高さ: 親要素いっぱいに */
-            flex-shrink: 0; /* 縮小を禁止 */
-		}
+		#output_resizer_v,
 		#output_resizer_v2 {
-            /* js_result_area <-> extension_area のリサイズバー */
-            width: 5px; /* 幅: 5px */
-            cursor: ew-resize; /* カーソル: 左右リサイズカーソル */
-            background-color: #444; /* 背景色: 濃いグレー */
-            height: 100%; /* 高さ: 親要素いっぱいに */
-            flex-shrink: 0; /* 縮小を禁止 */
+            width: 5px;
+            cursor: ew-resize;
+            background-color: transparent;
+            height: 100%;
+            flex-shrink: 0;
+            transition: background-color var(--transition-fast);
+		}
+		#output_resizer_v:hover,
+		#output_resizer_v2:hover {
+            background-color: var(--accent-soft);
 		}
 
-		/* その他のフッター内の要素 */
 		footer div {
-            font-size: 0.8em; /* フォントサイズ: 親要素の0.8倍 */
-            margin-bottom: 0px; /* 下部マージン: 4px */
+            font-size: 0.8em;
+            margin-bottom: 0;
 		}
 		button, input[type="file"] {
-            margin-right: 10px; /* 右マージン: 10px */
+            margin-right: 10px;
 		}
 
-		#main_content { /* エディターとフッターを含むメインコンテンツエリア */
-            display: flex; /* Flexboxコンテナとして設定 */
-            flex-direction: column; /* 子要素を縦並びにする */
-            flex: 1; /* 拡大率: 1 (横幅の残りを全て使う) */
-            height: 100%; /* 高さ: 親要素いっぱいに */
-            min-width: 0; /* 最小幅: 0 (Flexboxの縮小トラブル防止) */
-            overflow: hidden; /* はみ出し防止 */
+		#main_content {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            height: 100%;
+            min-width: 0;
+            overflow: hidden;
+            background: var(--bg-editor);
 		}
-		#editor { /* エディター本体のコンテナ */
-            flex: 1; /* 拡大率: 1 (高さの残りを全て使う（フッター以外の部分）) */
-            width: 100%; /* 幅: 100% */
-            height: auto; /* 高さ: 自動 */
-            min-height: 0; /* 最小高さ: 0 (Flexboxの縮小トラブル防止) */
+		#editor {
+            flex: 1;
+            width: 100%;
+            height: auto;
+            min-height: 0;
+            position: relative;
 		}
-		#editor.editor-dragover { /* エディターへのドラッグ時の視覚効果 */
-            opacity: 0.7; /* 不透明度: 70% */
-            border: 3px dashed #007acc; /* 境界線: 3px 青っぽい破線 */
-            background-color: #2d2d2d; /* 背景色: 暗いグレー */
+		#editor.editor-dragover {
+            opacity: 0.85;
+            outline: 2px dashed var(--accent);
+            outline-offset: -4px;
+            background-color: var(--bg-hover);
 		}
 		#plot_container {
             flex: 1;
             width: 100%;
             height: 100%;
             min-height: 0;
-            display: none; /* 初期状態は非表示 */
-            background-color: rgb(30, 30, 30); /* エディタ背景に合わせる */
+            display: none;
+            background-color: var(--bg-editor);
             flex-direction: column;
-            align-items: center; /* 画像を中央揃え */
-            overflow-y: auto;    /* 縦スクロール有効 */
-            padding: 10px;
+            align-items: center;
+            overflow-y: auto;
+            padding: 12px;
             box-sizing: border-box;
 		}
 		#plot_container img {
-            max-width: 95%;      /* 画面からはみ出さないように */
-            margin-bottom: 20px; /* 画像間の余白 */
-            box-shadow: 0 0 10px rgba(0,0,0,0.5); /* 視認性向上のための影 */
+            max-width: 95%;
+            margin-bottom: 20px;
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-sm);
 		}
 		#preview_container {
             flex: 1;
             width: 100%;
             height: 100%;
             min-height: 0;
-            display: none; /* 初期状態は非表示 */
+            display: none;
             background-color: white;
             flex-direction: column;
 		}
@@ -749,6 +1059,7 @@
             height: 100%;
             border: none;
 		}
+
  		/* ### Spreadsheet Styles ### */
  		#spreadsheet_container {
             flex: 1;
@@ -756,8 +1067,8 @@
             height: 100%;
             min-height: 0;
             display: none;
-            background-color: #1e1e1e; /* IDEと同じ背景色 */
-            color: #ccc; /* IDEと同じ文字色 */
+            background-color: var(--bg-editor);
+            color: var(--text-secondary);
             overflow: auto;
 		}
 
@@ -769,377 +1080,426 @@
 		}
 
 		/* --- Jspreadsheet ダークテーマ用CSSの上書き --- */
-		/* テーブル全体の背景と枠線 */
 		.jexcel {
-            background-color: #1e1e1e !important;
-            border: 1px solid #333 !important;
+            background-color: var(--bg-editor) !important;
+            border: 1px solid var(--border-subtle) !important;
 		}
-		/* 通常セルの色と枠線 */
 		.jexcel tbody tr td {
-            background-color: #1e1e1e !important;
-            color: #ccc !important;
-            border-bottom: 1px solid #333 !important;
-            border-right: 1px solid #333 !important;
+            background-color: var(--bg-editor) !important;
+            color: var(--text-secondary) !important;
+            border-bottom: 1px solid var(--border-subtle) !important;
+            border-right: 1px solid var(--border-subtle) !important;
 		}
-		/* 行・列のヘッダー (A, B, C... / 1, 2, 3...) */
 		.jexcel thead tr td,
 		.jexcel tbody tr td.jexcel_label {
-            background-color: #2d2d2d !important; /* 少し明るいグレーで区別 */
-            color: #ccc !important;
-            border-bottom: 1px solid #444 !important;
-            border-right: 1px solid #444 !important;
+            background-color: var(--bg-elevated) !important;
+            color: var(--text-secondary) !important;
+            border-bottom: 1px solid var(--border-strong) !important;
+            border-right: 1px solid var(--border-strong) !important;
 		}
-		/* 選択中のセル */
 		.jexcel tbody tr td.highlight {
-            background-color: #062f4f !important; /* VSCode等の選択色に近い深い青 */
+            background-color: #1a3a52 !important;
             color: #fff !important;
 		}
-		/* 編集中のセル (ダブルクリック時) */
 		.jexcel tbody tr td.editor {
-            background-color: #1e1e1e !important;
+            background-color: var(--bg-editor) !important;
             color: #fff !important;
 		}
         .jexcel tbody tr td.editor input,
 		.jexcel tbody tr td.editor textarea {
             color: #ffffff !important;
-            background-color: #1e1e1e !important;
+            background-color: var(--bg-editor) !important;
 		}
+
 		/* ### Tab Bar Styles (タブバーのスタイル) ### */
 		#tab_bar_container {
-            /* タブバーのコンテナ */
-            display: flex; /* Flexboxコンテナとして設定 */
-            background-color: #252526; /* 背景色: VSCodeライクなヘッダー色 */
-            height: 35px; /* 高さ: 35px */
-            overflow-x: auto; /* X軸スクロール: タブが多い場合は水平スクロール */
-            flex-shrink: 0; /* 縮小を禁止（高さ固定） */
-            align-items: center; /* 子要素を垂直方向の中央に揃える */
-            border-bottom: 1px solid #1e1e1e; /* 下境界線: 1px 非常に暗いグレーの実線 */
+            display: flex;
+            background-color: var(--bg-panel);
+            height: 36px;
+            overflow-x: auto;
+            flex-shrink: 0;
+            align-items: stretch;
+            border-bottom: 1px solid var(--border-subtle);
 		}
-		/* スクロールバーのスタイル（webkit系） */
 		#tab_bar_container::-webkit-scrollbar {
-            height: 4px; /* スクロールバーの高さ: 4px */
+            height: 4px;
 		}
 		#tab_bar_container::-webkit-scrollbar-thumb {
-            background: #424242; /* スクロールバーのツマミの色 */
+            background: var(--border-strong);
+            border-radius: 2px;
 		}
 		.tab_item {
-            /* 各タブアイテムの基本スタイル */
-            display: flex; /* Flexboxコンテナとして設定 */
-            align-items: center; /* 子要素を垂直方向の中央に揃える */
-            padding: 0 10px; /* 内部パディング (上下0, 左右10px) */
-            height: 100%; /* 高さ: 親要素いっぱいに */
-            background-color: #2d2d2d; /* 背景色: 暗いグレー */
-            color: #969696; /* 文字色: グレー */
-            font-size: 13px; /* フォントサイズ: 13px */
-            cursor: pointer; /* カーソル: ポインター */
-            border-right: 1px solid #252526; /* 右境界線: 1px 非常に暗いグレーの実線 */
-            min-width: 80px; /* 最小幅: 80px */
-            max-width: 200px; /* 最大幅: 200px */
-            user-select: none; /* ユーザーによる選択を禁止 */
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            height: 100%;
+            background-color: transparent;
+            color: var(--text-muted);
+            font-size: 12.5px;
+            cursor: pointer;
+            border-right: 1px solid transparent;
+            min-width: 80px;
+            max-width: 200px;
+            user-select: none;
+            transition: background-color var(--transition-fast), color var(--transition-fast);
+            box-sizing: border-box;
+            border-top: 2px solid transparent;
 		}
 		.tab_item:hover {
-            background-color: #383838; /* ホバー時の背景色 */
+            background-color: var(--bg-hover);
+            color: var(--text-secondary);
 		}
 		.tab_item.active_tab {
-            /* アクティブなタブ */
-            background-color: #1e1e1e; /* 背景色: エディタ背景と同じ色 */
-            color: #ffffff; /* 文字色: 白 */
-            border-top: 1px solid #007acc; /* 上境界線: 1px 青の実線 (強調) */
+            background-color: var(--bg-editor);
+            color: var(--text-primary);
+            border-top-color: var(--accent);
 		}
 		.tab_name {
-            /* タブのファイル名 */
-            white-space: nowrap; /* テキストの折り返しを禁止 */
-            overflow: hidden; /* はみ出した部分を隠す */
-            text-overflow: ellipsis; /* はみ出したテキストを三点リーダーで表示 */
-            margin-right: 8px; /* 右マージン: 8px */
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-right: 8px;
 		}
 		.tab_close_btn {
-            /* タブを閉じるボタン */
-            border-radius: 50%; /* 角丸: 円形 */
-            width: 16px; /* 幅: 16px */
-            height: 16px; /* 高さ: 16px */
-            text-align: center; /* テキストを中央揃え */
-            line-height: 14px; /* 行の高さ: 14px */
-            font-size: 12px; /* フォントサイズ: 12px */
-            color: #ccc; /* 文字色: 薄いグレー */
-            margin-left: auto; /* 左マージンを自動にし、要素を右寄せ */
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            text-align: center;
+            line-height: 16px;
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-left: auto;
+            transition: background-color var(--transition-fast), color var(--transition-fast);
 		}
 		.tab_close_btn:hover {
-            background-color: #444; /* ホバー時の背景色: 濃いグレー */
-            color: #fff; /* ホバー時の文字色: 白 */
+            background-color: var(--bg-active);
+            color: var(--text-primary);
 		}
 		.tab_unsaved_indicator {
-            /* 未保存インジケーター（通常は非表示） */
-            font-size: 18px; /* フォントサイズ: 18px */
-            line-height: 10px; /* 行の高さ: 10px */
-            margin-left: 5px; /* 左マージン: 5px */
-            display: none; /* 要素を非表示 */
+            font-size: 18px;
+            line-height: 10px;
+            margin-left: 5px;
+            display: none;
+            color: var(--accent);
 		}
 		.tab_plus_btn {
-            /* 新規タブを追加するボタン */
-            display: flex; /* Flexboxコンテナとして設定 */
-            align-items: center; /* 子要素を垂直方向の中央に揃える */
-            justify-content: center; /* 子要素を水平方向の中央に揃える */
-            padding: 0 10px; /* 内部パディング (上下0, 左右10px) */
-            height: 100%; /* 高さ: 親要素いっぱいに */
-            background-color: transparent; /* 背景色: 透明 */
-            color: #969696; /* 文字色: グレー */
-            font-size: 16px; /* フォントサイズ: 16px */
-            cursor: pointer; /* カーソル: ポインター */
-            min-width: 30px; /* 最小幅: 30px */
-            border-right: 1px solid #252526; /* 右境界線: 1px 非常に暗いグレーの実線 */
-            user-select: none; /* ユーザーによる選択を禁止 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 10px;
+            height: 100%;
+            background-color: transparent;
+            color: var(--text-muted);
+            font-size: 16px;
+            cursor: pointer;
+            min-width: 30px;
+            user-select: none;
+            transition: background-color var(--transition-fast), color var(--transition-fast);
 		}
 		.tab_plus_btn:hover {
-            background-color: #383838; /* ホバー時の背景色: 暗いグレー */
-            color: #fff; /* ホバー時の文字色: 白 */
+            background-color: var(--bg-hover);
+            color: var(--text-primary);
 		}
 
 		/* ### Resizer Styles (リサイズバーのスタイル) ### */
-
-		/* Sidebar <-> Editor の垂直リサイズバー */
 		#sidebar_resizer_v {
-            width: 5px; /* 幅: 5px */
-            cursor: ew-resize; /* カーソル: 左右リサイズカーソル */
-            background-color: #444; /* 背景色: 濃いグレー */
-            height: 100%; /* 高さ: 親要素いっぱいに */
+            width: 5px;
+            cursor: ew-resize;
+            background-color: transparent;
+            border-left: 1px solid var(--border-subtle);
+            height: 100%;
+            transition: background-color var(--transition-fast), border-color var(--transition-fast);
 		}
-
-		/* Script_Explorer <-> VFS_Explorer の水平リサイズバー */
-		#sidebar_resizer_h {
-            height: 5px; /* 高さ: 5px */
-            cursor: ns-resize; /* カーソル: 上下リサイズカーソル */
-            background-color: #444; /* 背景色: 濃いグレー */
-            flex-shrink: 0; /* 縮小を禁止（高さ固定） */
+		#sidebar_resizer_v:hover {
+            background-color: var(--accent-soft);
+            border-left-color: var(--accent);
 		}
-
-		/* VFS_Explorer <-> Outline の水平リサイズバー */
+		#sidebar_resizer_h,
 		#sidebar_resizer_h2 {
-            height: 5px; /* 高さ: 5px */
-            cursor: ns-resize; /* カーソル: 上下リサイズカーソル */
-            background-color: #444; /* 背景色: 濃いグレー */
-            flex-shrink: 0; /* 縮小を禁止（高さ固定） */
+            height: 5px;
+            cursor: ns-resize;
+            background-color: transparent;
+            border-top: 1px solid var(--border-subtle);
+            flex-shrink: 0;
+            transition: background-color var(--transition-fast), border-color var(--transition-fast);
 		}
-
-		#footer_resizer_h { /* Editor <-> Footer の水平リサイズバー */
-            height: 5px; /* 高さ: 5px */
-            cursor: ns-resize; /* カーソル: 上下リサイズカーソル */
-            background-color: #444; /* 背景色: 濃いグレー */
-            flex-shrink: 0; /* 縮小を禁止（潰れないようにする） */
-            width: 100%; /* 幅: 100% */
+		#sidebar_resizer_h:hover,
+		#sidebar_resizer_h2:hover {
+            background-color: var(--accent-soft);
+            border-top-color: var(--accent);
+		}
+		#footer_resizer_h {
+            height: 5px;
+            cursor: ns-resize;
+            background-color: transparent;
+            border-top: 1px solid var(--border-subtle);
+            flex-shrink: 0;
+            width: 100%;
+            transition: background-color var(--transition-fast), border-color var(--transition-fast);
+		}
+		#footer_resizer_h:hover {
+            background-color: var(--accent-soft);
+            border-top-color: var(--accent);
 		}
 
 		/* ### Sidebar Layout (サイドバーのレイアウト) ### */
 		#sidebar_area_container {
-            /* サイドバー全体のコンテナ (Script_Explorer + VFS_Explorer + Outline) */
-            width: 280px; /* 初期幅: 280px */
-            min-width: 150px; /* 最小幅: 150px */
-            background-color: rgb(30, 30, 30); /* 背景色: 暗いグレー */
-            display: flex; /* Flexboxコンテナとして設定 */
-            flex-direction: column; /* 子要素を縦方向に配置 */
-            overflow: hidden; /* はみ出しを隠す */
-            flex-shrink: 0; /* 縮小を禁止（サイドバー幅拡大を可能にする） */
+            width: 280px;
+            min-width: 150px;
+            background-color: var(--bg-panel);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            flex-shrink: 0;
+            border-right: 1px solid var(--border-subtle);
 		}
 
-		/* サイドバー内の各パネルの共通スタイル */
 		#script_explorer_container, #vfs_explorer_container, #outline_container {
-            padding: 10px; /* 内部パディング */
-            box-sizing: border-box; /* パディングを幅と高さに含める */
-            overflow-y: auto; /* 縦スクロール可能 */
-            flex-shrink: 1; /* 縮小を許可 */
-            flex-grow: 1; /* 拡大を許可 */
+            padding: 10px 10px 8px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            flex-shrink: 1;
+            flex-grow: 1;
 		}
 		#script_explorer_container {
-			  flex-basis: 25%; /* 初期基準高さ: 25% (Script Explorerの初期高さの割合) */
+			  flex-basis: 25%;
 		}
 		#vfs_explorer_container {
-		  	flex-basis: 25%; /* 初期基準高さ: 25% (VFS Explorerの初期高さの割合) */
+		  	flex-basis: 25%;
 		}
 		#outline_container {
-		  	flex-basis: 50%; /* 初期基準高さ: 50% (Outlineの初期高さの割合) */
+		  	flex-basis: 50%;
 		}
 
 		/* サイドバー内のセクション見出し (h3) */
 		#sidebar_area_container h3 {
-            margin: 0 0 10px 0; /* マージン (上:0, 左右:0, 下:10px) */
-            font-size: 14px; /* フォントサイズ: 14px */
-            color: #ccc; /* 文字色: 薄いグレー */
-            border-bottom: 1px solid #555; /* 下境界線: 1px 濃いグレーの実線 */
-            padding-bottom: 5px; /* 下部パディング: 5px */
+            margin: 0 0 8px 0;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border-subtle);
+            padding-bottom: 8px;
+		}
+
+		/* スクロールバー（サイドバー） */
+		#script_explorer_container::-webkit-scrollbar,
+		#vfs_explorer_container::-webkit-scrollbar,
+		#outline_container::-webkit-scrollbar {
+            width: 6px;
+		}
+		#script_explorer_container::-webkit-scrollbar-thumb,
+		#vfs_explorer_container::-webkit-scrollbar-thumb,
+		#outline_container::-webkit-scrollbar-thumb {
+            background: var(--border-strong);
+            border-radius: 3px;
 		}
 
 		/* ### File Explorer Styles (ファイルエクスプローラーのスタイル) ### */
-		#script_explorer ul, #vfs_explorer ul { /* ツリー構造のリスト */
-            list-style: none; /* リストのマーカーを非表示 */
-            padding-left: 15px; /* 左パディング: 15px (インデント) */
-            margin: 0; /* マージンをリセット */
+		#script_explorer ul, #vfs_explorer ul {
+            list-style: none;
+            padding-left: 14px;
+            margin: 0;
 		}
-		/* li 自体のスタイルは構造用のみに残す */
 		.explorer-item {
-            /* 以前の padding, cursor, color, hover は item_row へ移動 */
-            font-size: 14px;
+            font-size: 13px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
 		}
-		/* テキストとアイコンを含む「行」のスタイル */
 		.item_row {
-            padding: 4px; /* 内部パディング */
-            cursor: pointer; /* カーソル */
-            color: #ddd; /* 文字色 */
-            display: block; /* ブロック表示で幅いっぱいにする */
-            border-radius: 3px; /* 少し角丸に */
+            padding: 3px 6px;
+            cursor: pointer;
+            color: var(--text-secondary);
+            display: block;
+            border-radius: var(--radius-sm);
+            transition: background-color var(--transition-fast), color var(--transition-fast);
 		}
-		/* ホバー時の背景色は「行」に対して適用 */
 		.item_row:hover {
-			background-color: #555; /* ホバー時の背景色: 濃いグレー */
+			background-color: var(--bg-hover);
+            color: var(--text-primary);
 		}
-		/* クリック選択時のスタイル */
 		.item_row.selected_item {
-            background-color: #007acc; /* 選択時: 青色 (VSCode風) */
-            color: white; /* 文字色を白で強調 */
+            background-color: var(--accent-soft);
+            color: var(--text-primary);
+            box-shadow: inset 2px 0 0 var(--accent);
 		}
 
-		/* アイコン（:before疑似要素）は item_row に対して適用 */
 		.item_row::before {
-            font-family: "Consolas", monospace; /* アイコン用のフォント */
-            margin-right: 8px; /* 右マージン */
-            width: 16px; /* 幅 */
+            font-family: "Consolas", monospace;
+            margin-right: 8px;
+            width: 16px;
             display: inline-block;
             text-align: center;
 		}
-		/* フォルダかどうかは親の li (.folder-item) で判断し、アイコンは子の .item_row に出す */
 		.folder-item > .item_row::before {
-		  	content: "📁"; /* フォルダアイコン */
+		  	content: "📁";
 		}
 		.folder-item.expanded > .item_row::before {
-		  	content: "📂"; /* 展開されたフォルダアイコン */
+		  	content: "📂";
 		}
 		.file-item > .item_row::before {
-		  	content: "📄"; /* 一般ファイルアイコン */
+		  	content: "📄";
 		}
 		.python-file > .item_row::before {
-		  	content: "🐍"; /* Pythonファイルアイコン */
+		  	content: "🐍";
 		}
 
 		.folder-item.collapsed > ul {
-		  	display: none; /* 閉じているフォルダの子要素 (ul) を非表示 */
+		  	display: none;
 		}
 
 		/* ### Outline Styles (アウトラインのスタイル) ### */
 		.outline-item {
-            /* アウトラインの基本アイテム */
-            padding: 1px; /* 内部パディング: 1px */
-            cursor: pointer; /* カーソル: ポインター */
-            color: #fff; /* 文字色: 白 */
-            display: flex; /* Flexboxコンテナとして設定 */
-            align-items: center; /* 子要素を垂直方向の中央に揃える */
-            font-size: 14px; /* フォントサイズ: 14px */
+            padding: 3px 6px;
+            cursor: pointer;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            font-size: 13px;
+            border-radius: var(--radius-sm);
+            transition: background-color var(--transition-fast);
 		}
 		.outline-item:hover {
-			background-color: rgb(150, 150, 150); /* ホバー時の背景色: 中程度のグレー */
+			background-color: var(--bg-hover);
 		}
 		.class-item {
-            /* クラス定義のアイテム */
-            color: rgb(30, 170, 30); /* 文字色: 緑系 */
-            font-size: 16px; /* フォントサイズ: 16px */
+            color: #7dcea0;
+            font-size: 13px;
+            font-weight: 500;
 		}
 		.function-item {
-            /* 関数/メソッド定義のアイテム */
-            color: rgb(30, 120, 170); /* 文字色: 青系 */
-            padding-left: 15px; /* 左パディング: 15px (クラスよりインデント) */
-            font-size: 16px; /* フォントサイズ: 16px */
+            color: #6cb6ff;
+            padding-left: 14px;
+            font-size: 13px;
 		}
 
 		/* ### Button Styles (各種ボタンのスタイル) ### */
 		.sidebar_button_css {
-            /* サイドバー内のボタンの共通スタイル */
-            display: inline-flex; /* inline-block から変更: SVGを中央配置しやすくするため */
-            width: 30px; /* 幅: 30px */
-            height: 20px; /* 高さ: 20px */
-            border-radius: 5%; /* 角丸: 5% */
-            font-size: 1em; /* フォントサイズ: 親要素と同じ */
-            margin-right: 3px; /* 右マージン: 3px */
-            text-align: center; /* テキストを中央揃え */
-            align-items: center;  /* 垂直中央 */
-            justify-content: center; /* 水平中央 */
-            cursor: pointer; /* カーソル: ポインター */
-            padding: 0px 0px; /* 内部パディング: 0 */
-            background: rgba(30, 30, 30, 1); /* 背景色: 暗いグレー (不透明) */
-            color: #ccc; /* 文字色: 薄いグレー */
-            line-height: 1em; /* 行の高さ: 親要素と同じ */
-            opacity: 1; /* 不透明度: 100% */
-            vertical-align: middle; /* 垂直方向の中央揃え */
-            transition: .1s; /* トランジション: 0.1秒 */
+            display: inline-flex;
+            width: 28px;
+            height: 24px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-subtle);
+            font-size: 1em;
+            margin-right: 4px;
+            text-align: center;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            padding: 0;
+            background: var(--bg-input);
+            color: var(--text-secondary);
+            line-height: 0;
+            opacity: 1;
+            vertical-align: middle;
+            transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
 		}
-		.sidebar_button_css:hover {
-            box-shadow: none; /* ホバー時のボックスシャドウを解除 */
-            opacity: 1; /* ホバー時の不透明度: 100% */
+		.sidebar_button_css:hover:not(:disabled) {
+            background: var(--bg-hover);
+            border-color: var(--border-strong);
+            color: var(--text-primary);
 		}
-		/* GitHub ログイン済み時の Script_Explorer ボタン色 */
+		.sidebar_button_css:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+		}
 		#github_connect.github_logged_in {
-            color: #7dcea0;
+            color: var(--success);
+            border-color: rgba(61, 186, 140, 0.4);
 		}
 
 		/* VFS / Script エリアのドラッグオーバー時の視覚効果 */
 		#vfs_explorer_container.dragover,
 		#script_explorer_container.dragover {
-            background-color: #444; /* 背景を少し明るく */
-            border: 2px dashed #888; /* 境界線: 2px 濃いグレーの破線を表示 */
-            opacity: 0.8; /* 不透明度: 80% */
+            background-color: var(--accent-soft);
+            border: 2px dashed var(--accent);
+            border-radius: var(--radius-md);
+            opacity: 1;
 		}
-		/* エクスプローラ内部移動時のドロップターゲット強調 */
 		.vfs_drop_target,
 		.script_drop_target {
-            background-color: #2a4d69 !important; /* 背景色: 青っぽく強調 (最優先) */
-            border: 1px dashed #63ace5; /* 境界線: 1px 明るい青の破線 */
-            color: white; /* 文字色: 白 */
+            background-color: var(--accent-soft) !important;
+            border: 1px dashed var(--accent);
+            color: var(--text-primary);
+            border-radius: var(--radius-sm);
 		}
 
 		.sidebar_button_container {
-            /* サイドバーボタンのコンテナ（横並び用） */
-            display: flex; /* Flexboxコンテナとして設定 */
-            gap: 0px; /* アイテム間の隙間: 0px */
+            display: flex;
+            gap: 2px;
+            align-items: center;
+            flex-wrap: wrap;
 		}
+
 		/* ### Sidebar Toggle Style (サイドバー切り替え) ### */
-		/* bodyタグに "sidebar-hidden" クラスが付いた時のスタイル */
 		body.sidebar-hidden #sidebar_area_container {
-            display: none; /* サイドバーを非表示 */
+            display: none;
 		}
         body.sidebar-hidden #sidebar_resizer_v {
-            display: none; /* サイドバー横のリサイズバーも非表示 */
+            display: none;
 		}
 
 		/* ### Loading Overlay (ロード中画面) ### */
 		#loading_overlay {
-            position: fixed; /* 配置: 画面に固定 */
-            top: 0; /* 上端から: 0 */
-            left: 0; /* 左端から: 0 */
-            width: 100%; /* 幅: 100% */
-            height: 100%; /* 高さ: 100% */
-            background-color: rgba(0, 0, 0, 0.5); /* 背景色: 半透明の黒背景 */
-            z-index: 9999; /* Z軸の深さ: 最前面に表示 (ヘッダーより下) */
-            display: none; /* デフォルトは非表示 */
-            justify-content: center; /* 水平方向の中央揃え */
-            align-items: center; /* 垂直方向の中央揃え */
-            flex-direction: column; /* 子要素を縦方向に配置 */
-            color: white; /* 文字色: 白 */
-            font-size: 1.2em; /* フォントサイズ: 親要素の1.2倍 */
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(12, 14, 18, 0.72);
+            z-index: 9999;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            color: var(--text-primary);
+            font-size: 1.05em;
+            font-family: var(--font-ui);
+            backdrop-filter: blur(2px);
 		}
 		.spinner {
-            /* 回転するローディングアニメーションの円 */
-            border: 8px solid #f3f3f3; /* 境界線: 8px 薄いグレーの実線 */
-            border-top: 8px solid #3498db; /* 境界線の上部: 8px 青色 (回転する部分) */
-            border-radius: 50%; /* 形状: 円形 */
-            width: 60px; /* 幅: 60px */
-            height: 60px; /* 高さ: 60px */
-            animation: spin 1s linear infinite; /* アニメーション: spin を 1秒かけて線形に無限に繰り返す */
-            margin-bottom: 15px; /* 下部マージン: 15px */
+            border: 3px solid var(--border-strong);
+            border-top: 3px solid var(--accent);
+            border-radius: 50%;
+            width: 42px;
+            height: 42px;
+            animation: spin 0.85s linear infinite;
+            margin-bottom: 14px;
 		}
         @keyframes spin {
-            /* スピナーの回転アニメーションの定義 */
-            0% { transform: rotate(0deg); } /* 開始時: 0度回転 */
-            100% { transform: rotate(360deg); } /* 終了時: 360度回転 */
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+		}
+
+		/* 言語選択オーバーレイ（新規タブ） */
+		#lang_select_overlay {
+            border-radius: var(--radius-md) !important;
+            box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45) !important;
+            background: var(--bg-elevated) !important;
+            border: 1px solid var(--border-subtle) !important;
+            padding: 12px !important;
+		}
+		#lang_select_overlay button {
+            background: var(--bg-input);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-strong);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            height: 28px;
+            transition: background-color var(--transition-fast), color var(--transition-fast);
+		}
+		#lang_select_overlay button:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+            border-color: var(--accent);
+		}
+
+		button:focus-visible,
+		input:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
 		}
     </style>
 
@@ -2584,16 +2944,17 @@ await main_async_def()
                     // editor DOM の破壊を避けるため overlay を上から重ねる
                     const overlay = document.createElement("div");
                     overlay.id = "lang_select_overlay";
+                    // 見た目の詳細は #lang_select_overlay の CSS で統一
                     overlay.style = `
         position: absolute;
         top: 10%;
         left: 20%;
-        background: #1e1e1e;
-        padding: 10px;
-        border: 1px solid #555;
+        background: #22262f;
+        padding: 12px;
+        border: 1px solid #2e3440;
         z-index: 50;
         display: flex;
-        gap: 5px;
+        gap: 6px;
       `;
                     overlay.innerHTML = `
         <button data-lang="python" style="width: 45px;">.py</button>
@@ -7124,7 +7485,7 @@ sys.stderr = Web_Stdout()
                     if (this.sendBtn) {
                         this.sendBtn.disabled = false;
                         this.sendBtn.textContent = "送信";
-                        this.sendBtn.style.backgroundColor = "#007acc";
+                        this.sendBtn.style.backgroundColor = "#3d9cf0";
                     }
                 }
 
@@ -7200,7 +7561,7 @@ sys.stderr = Web_Stdout()
 
                     this.userInput.disabled = true;
                     this.sendBtn.textContent = "中断";
-                    this.sendBtn.style.backgroundColor = "#d9534f"; // 警告カラー（赤）に変更
+                    this.sendBtn.style.backgroundColor = "#e06c75"; // 警告カラー（赤）に変更
                     this.sendBtn.disabled = false;
 
                     try {
@@ -7249,7 +7610,7 @@ sys.stderr = Web_Stdout()
 
                             this.userInput.disabled = false;
                             this.sendBtn.textContent = "送信";
-                            this.sendBtn.style.backgroundColor = "#007acc"; // 元のテーマカラー（青）に戻す
+                            this.sendBtn.style.backgroundColor = "#3d9cf0"; // 元のテーマカラー（青）に戻す
                             this.sendBtn.disabled = false;
                             this.userInput.focus();
                         }
@@ -7266,7 +7627,7 @@ sys.stderr = Web_Stdout()
 
                     this.userInput.disabled = true;
                     this.sendBtn.textContent = "中断";
-                    this.sendBtn.style.backgroundColor = "#d9534f"; // 警告カラー（赤）
+                    this.sendBtn.style.backgroundColor = "#e06c75"; // 警告カラー（赤）
                     this.sendBtn.disabled = false;
 
                     try {
@@ -7303,7 +7664,7 @@ sys.stderr = Web_Stdout()
 
                             this.userInput.disabled = false;
                             this.sendBtn.textContent = "送信";
-                            this.sendBtn.style.backgroundColor = "#007acc";
+                            this.sendBtn.style.backgroundColor = "#3d9cf0";
                             this.sendBtn.disabled = false;
                             this.userInput.focus();
                         }
@@ -7313,37 +7674,23 @@ sys.stderr = Web_Stdout()
                 // チャット画面へのメッセージ追加ヘルパー
                 appendMessage(text, sender, saveToLog = true) {
                     const msgDiv = document.createElement("div");
+                    // 見た目は CSS クラスで統一（インライン style 依存を減らす）
+                    msgDiv.classList.add("nano-msg");
 
                     if (sender !== "summary" && saveToLog) {
                         this.pendingLogs.push({ role: sender, content: text });
                     }
 
-                    // 送信者（ユーザー or AI）に応じたスタイル適用
+                    // 送信者（ユーザー or AI）に応じたクラス適用
                     if (sender === "user") {
-                        msgDiv.style.backgroundColor = "#007acc";
-                        msgDiv.style.color = "white";
-                        msgDiv.style.alignSelf = "flex-end";
+                        msgDiv.classList.add("nano-msg-user");
                     } else if (sender === "system") {
-                        msgDiv.style.backgroundColor = "#444444";
-                        msgDiv.style.color = "#e0e0e0";
-                        msgDiv.style.alignSelf = "flex-start";
-                        msgDiv.style.borderLeft = "4px solid #28a745"; // システムからの応答と識別しやすくするための左線
+                        msgDiv.classList.add("nano-msg-system");
                     } else if (sender === "summary") {
-                        msgDiv.style.backgroundColor = "#2d2d30";
-                        msgDiv.style.color = "#8ab4f8";
-                        msgDiv.style.alignSelf = "flex-start";
-                        msgDiv.style.borderLeft = "4px solid #b48ead"; // 要約と識別しやすくするためのパープルの左線
+                        msgDiv.classList.add("nano-msg-summary");
                     } else {
-                        msgDiv.style.backgroundColor = "#333";
-                        msgDiv.style.color = "#ccc";
-                        msgDiv.style.alignSelf = "flex-start";
+                        msgDiv.classList.add("nano-msg-ai");
                     }
-
-                    msgDiv.style.padding = "8px 12px";
-                    msgDiv.style.borderRadius = "4px";
-                    msgDiv.style.maxWidth = "85%";
-                    msgDiv.style.whiteSpace = "pre-wrap"; // 改行を維持
-                    msgDiv.style.wordBreak = "break-all"; // 長い英単語の折り返し
 
                     msgDiv.textContent = text;
                     this.chatContainer.appendChild(msgDiv);
@@ -7611,10 +7958,10 @@ sys.stderr = Web_Stdout()
                     // チャットコンテナを初期状態（案内メッセージのみ）にクリア
                     if (this.chatContainer) {
                         this.chatContainer.innerHTML = `
-                            <div style="background-color: #333; padding: 8px 12px; border-radius: 4px; align-self: flex-start; max-width: 85%; color: #ccc;">
+                            <div class="nano-msg nano-msg-hint">
                                 You can launch Gemini nano and chat using the button below.
                             </div>
-                            <div style="background-color: #333; padding: 8px 12px; border-radius: 4px; align-self: flex-start; max-width: 85%; color: #ccc;">
+                            <div class="nano-msg nano-msg-hint">
                                 下のボタンから Gemini nano を起動し、チャット出来ます
                             </div>
                         `;
@@ -7635,7 +7982,7 @@ sys.stderr = Web_Stdout()
                     if (this.sendBtn) {
                         this.sendBtn.disabled = false; // 送信ボタンを有効化して初回起動を待てる状態にする
                         this.sendBtn.textContent = "送信";
-                        this.sendBtn.style.backgroundColor = "#007acc";
+                        this.sendBtn.style.backgroundColor = "#3d9cf0";
                     }
 
                     this.isFirstSession = true; // 初回起動フラグをリセット
@@ -7802,7 +8149,7 @@ ${newRawLog}`;
 
                     this.userInput.disabled = true;
                     this.sendBtn.textContent = "中断";
-                    this.sendBtn.style.backgroundColor = "#d9534f"; // 警告カラー（赤）に変更
+                    this.sendBtn.style.backgroundColor = "#e06c75"; // 警告カラー（赤）に変更
                     this.sendBtn.disabled = false;
 
                     try {
@@ -7838,7 +8185,7 @@ ${newRawLog}`;
 
                             this.userInput.disabled = false;
                             this.sendBtn.textContent = "送信";
-                            this.sendBtn.style.backgroundColor = "#007acc"; // 元のテーマカラー（青）に戻す
+                            this.sendBtn.style.backgroundColor = "#3d9cf0"; // 元のテーマカラー（青）に戻す
                             this.sendBtn.disabled = false;
                         }
                     }
