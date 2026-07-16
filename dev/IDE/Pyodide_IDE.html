@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pyodide_IDE(v1.12.030)</title>
+    <title>Pyodide_IDE(v1.12.031)</title>
     <link rel="icon" type="image/png" href="favicon.png">
 
     <meta http-equiv="Content-Security-Policy" content="
@@ -65,14 +65,25 @@
         body {
             display: flex;
             flex-direction: column;
+            min-width: 0;
+            min-height: 0;
         }
 
-        iframe {
-            width: 100%;
-            flex: 1;
+        /* IDE iframe: flex で残り幅を確実に埋め、縮小時の隙間を防ぐ */
+        #ide_container {
+            flex: 1 1 0%;
+            min-width: 0;
+            width: auto;
+            height: 100%;
             border: none;
             display: block;
             background: var(--bg-editor);
+        }
+
+        /* その他 iframe 用の最低限スタイル（プレビュー等は sandbox 側） */
+        iframe {
+            border: none;
+            display: block;
         }
 
         /* 初期ローダー */
@@ -107,11 +118,13 @@
 
         #main_wrapper {
             display: flex;
-            flex: 1;
+            flex: 1 1 0%;
             width: 100%;
+            min-width: 0;
             min-height: 0;
             overflow: hidden;
             background: var(--bg-app);
+            align-items: stretch;
         }
 
         /* VFS 外部 DnD 用: ホスト側オーバーレイ（sandbox では Entry API 不可のためホストが受ける） */
@@ -134,13 +147,16 @@
         /* ### AI サイドバー ### */
         .ai_sidebar_css {
             width: 350px;
+            max-width: 70vw;
             background-color: var(--bg-panel);
             border-left: 1px solid var(--border-subtle);
             display: flex;
             flex-direction: column;
             color: var(--text-primary);
             font-family: var(--font-ui);
-            flex-shrink: 0;
+            flex: 0 0 auto; /* 幅は JS で制御。縮んで隙間を作らない */
+            min-width: 150px;
+            box-sizing: border-box;
         }
 
         body.ai-sidebar-hidden .ai_sidebar_css {
@@ -150,16 +166,20 @@
         #ai_sidebar_resizer_v {
             width: 5px;
             cursor: ew-resize;
-            background-color: transparent;
+            background-color: var(--bg-panel);
             border-left: 1px solid var(--border-subtle);
+            border-right: 1px solid var(--border-subtle);
             height: 100%;
-            flex-shrink: 0;
+            flex: 0 0 5px;
             transition: background-color var(--transition-fast), border-color var(--transition-fast);
+            box-sizing: border-box;
+            z-index: 2;
         }
 
         #ai_sidebar_resizer_v:hover {
             background-color: var(--accent-soft);
             border-left-color: var(--accent);
+            border-right-color: var(--accent);
         }
 
         body.ai-sidebar-hidden #ai_sidebar_resizer_v {
@@ -924,7 +944,9 @@
 		}
 		#container {
             display: flex;
-            flex: 1;
+            flex: 1 1 0%;
+            min-width: 0;
+            min-height: 0;
             overflow: hidden;
 		}
 		footer {
@@ -936,6 +958,7 @@
             box-sizing: border-box;
             flex-shrink: 0;
             width: 100%;
+            min-width: 0;
             border-top: 1px solid var(--border-subtle);
 		}
 
@@ -945,8 +968,11 @@
             flex: 1;
             gap: 0;
             min-height: 0;
+            min-width: 0;
+            width: 100%;
             padding: 6px;
             box-sizing: border-box;
+            /* 子の固定幅合計がずれても右端パネル(grow)が余白を吸収 */
 		}
 		#py_result_area,
 		#js_result_area,
@@ -962,14 +988,17 @@
             box-sizing: border-box;
             min-width: 50px;
 		}
+		/* 初期比率。リサイズ後は JS が flex を上書き */
 		#py_result_area {
             flex: 6 1 0%;
 		}
 		#js_result_area {
             flex: 3 1 0%;
 		}
+		/* 右端は常に余り幅を吸収し、親幅変化時の隙間を防ぐ */
 		#extension_area {
             flex: 3 1 0%;
+            min-width: 50px;
             height: 100%;
             display: flex;
             flex-direction: column;
@@ -1007,11 +1036,19 @@
 		#main_content {
             display: flex;
             flex-direction: column;
-            flex: 1;
+            flex: 1 1 0%;
             height: 100%;
             min-width: 0;
+            min-height: 0;
             overflow: hidden;
             background: var(--bg-editor);
+		}
+		/* エディタ側も残り高さを確実に埋める */
+		#editor,
+		#plot_container,
+		#preview_container,
+		#spreadsheet_container {
+            min-width: 0;
 		}
 		#editor {
             flex: 1;
@@ -1250,8 +1287,9 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            flex-shrink: 0;
+            flex: 0 0 280px; /* 幅は JS リサイズで上書き */
             border-right: 1px solid var(--border-subtle);
+            box-sizing: border-box;
 		}
 
 		#script_explorer_container, #vfs_explorer_container, #outline_container {
@@ -4726,7 +4764,7 @@ json.dumps(result)
         }
 
         //-------------------------------------------------------- ### Drag_Handler_(メモリリーク対策) ###
-        function attach_drag_handler(element, onDrag, onStart) {
+        function attach_drag_handler(element, onDrag, onStart, onEnd) {
             if (!element) return; // 要素が存在しない場合は何もしない
 
             const startDrag = (e) => {
@@ -4738,6 +4776,8 @@ json.dumps(result)
 
                 // ドラッグ開始時のコールバックを実行（初期値の取得などに使用）
                 if (onStart) onStart();
+                // ドラッグ中のテキスト選択や iframe 内でのイベント喪失を抑制
+                document.body.style.userSelect = "none";
 
                 // ドラッグ中の処理 (onMouseMove) を定義
                 const onMouseMove = (moveEvent) => {
@@ -4753,6 +4793,8 @@ json.dumps(result)
                     // イベントリスナーを確実に削除し、メモリリークを防ぐ
                     document.removeEventListener("mousemove", onMouseMove);
                     document.removeEventListener("mouseup", onMouseUp);
+                    document.body.style.userSelect = "";
+                    if (onEnd) onEnd();
                 };
 
                 // リスナーを document に追加し、ドラッグが要素外に出ても追跡できるようにする
@@ -4765,13 +4807,68 @@ json.dumps(result)
         }
 
         //-------------------------------------------------------- ### Resizer_Logic_(FIXED) ###
+
+        // フッター横並びエリアの「子が使える幅」（padding 除外）
+        function get_footer_content_width() {
+            const el = footer_area_container_element;
+            if (!el) return 0;
+            const style = window.getComputedStyle(el);
+            const padL = parseFloat(style.paddingLeft) || 0;
+            const padR = parseFloat(style.paddingRight) || 0;
+            return Math.max(0, el.clientWidth - padL - padR);
+        }
+
+        // 右端 extension は flex-grow で余りを吸収（隙間防止）
+        function apply_footer_panel_flex(pyWidth, jsWidth) {
+            const minW = 50;
+            py_result_area_element.style.flex = `0 0 ${Math.max(minW, pyWidth)}px`;
+            js_result_area_element.style.flex = `0 0 ${Math.max(minW, jsWidth)}px`;
+            // grow:1 で親幅変化・リサイザ計算誤差を吸収
+            extension_area_element.style.flex = "1 1 0%";
+            extension_area_element.style.minWidth = `${minW}px`;
+        }
+
+        // 親幅が狭くなったとき、固定幅がはみ出さないよう比例縮小
+        function clamp_footer_panel_widths() {
+            if (!footer_area_container_element) return;
+            // まだ比率モード（px 固定前）なら何もしない
+            const pyFlex = py_result_area_element.style.flex || "";
+            if (!pyFlex.includes("px")) return;
+
+            const available = get_footer_content_width();
+            const resizerTotal =
+                (footer_resizer_v_element ? footer_resizer_v_element.offsetWidth : 0) +
+                (footer_resizer_v2_element ? footer_resizer_v2_element.offsetWidth : 0);
+            const minW = 50;
+            // extension 最低幅を確保したうえで py/js に配分できる幅
+            const budget = available - resizerTotal - minW;
+            if (budget < minW * 2) return;
+
+            let pyW = py_result_area_element.offsetWidth;
+            let jsW = js_result_area_element.offsetWidth;
+            const sum = pyW + jsW;
+            if (sum <= budget) {
+                // 足りている場合も extension を grow に戻し隙間を塞ぐ
+                apply_footer_panel_flex(pyW, jsW);
+                return;
+            }
+            // はみ出し: 比率を保って縮小
+            const scale = budget / sum;
+            apply_footer_panel_flex(Math.max(minW, pyW * scale), Math.max(minW, jsW * scale));
+        }
+
         function setup_resizers() {
             // 1. sidebar_area_width // (sidebar <-> (editor & footer))
             let start_sidebar_width;
             attach_drag_handler(sidebar_resizer_v_element, (dx) => {
                 const new_width = start_sidebar_width + dx;
-                if (new_width > 150) sidebar_area_container_element.style.width = `${new_width}px`;
-            }, () => start_sidebar_width = sidebar_area_container_element.offsetWidth);
+                if (new_width > 150) {
+                    sidebar_area_container_element.style.width = `${new_width}px`;
+                    sidebar_area_container_element.style.flex = `0 0 ${new_width}px`;
+                }
+            }, () => {
+                start_sidebar_width = sidebar_area_container_element.offsetWidth;
+            });
 
             // 2. script_explorer_height // (Script_Explorer <-> VFS_Explorer)
             let start_script_h;
@@ -4798,75 +4895,108 @@ json.dumps(result)
             }, () => start_vfs_h = vfs_container_element.offsetHeight);
 
             // 4. py_result_width // (py_result_area <-> js_result_area)
+            // py / js を固定幅で動かし、extension は grow で残りを埋める
             let start_py_result_w;
-            let start_js_result_w; // 変数追加
-            let start_plot_w;      // 変数追加
+            let start_js_result_w;
 
             attach_drag_handler(footer_resizer_v_element, (dx, dy) => {
-                const new_py_result_width = start_py_result_w + dx;
-                const footer_width = footer_area_container_element.clientWidth;
-                // 全体幅 - (左エリア新幅 + 右エリア固定幅 + リサイザー合計幅) = 中央エリア新幅
-                const resizer_total_width = footer_resizer_v_element.offsetWidth + footer_resizer_v2_element.offsetWidth;
-                const new_js_result_width = footer_width - new_py_result_width - start_plot_w - resizer_total_width;
+                const available = get_footer_content_width();
+                const resizer_total_width =
+                    footer_resizer_v_element.offsetWidth + footer_resizer_v2_element.offsetWidth;
+                const minW = 50;
+                // extension 最低幅を残した予算内で py / js を配分
+                const budget = available - resizer_total_width - minW;
+                let new_py = start_py_result_w + dx;
+                let new_js = start_js_result_w - dx; // 境界を動かす: py 増 = js 減
 
-                if (new_py_result_width > 50 && new_js_result_width > 50) {
-                    // flex-grow等を無効化しつつ幅を指定 (flex: 0 0 Xpx)
-                    py_result_area_element.style.flex = `0 0 ${new_py_result_width}px`;
-                    js_result_area_element.style.flex = `0 0 ${new_js_result_width}px`;
+                if (new_py < minW) {
+                    new_js -= (minW - new_py);
+                    new_py = minW;
+                }
+                if (new_js < minW) {
+                    new_py -= (minW - new_js);
+                    new_js = minW;
+                }
+                // 予算超過時は比例ではなく端をクリップ
+                if (new_py + new_js > budget) {
+                    const overflow = new_py + new_js - budget;
+                    // ドラッグ方向に応じて圧迫側を削る
+                    if (dx >= 0) {
+                        new_py = Math.max(minW, new_py - overflow);
+                    } else {
+                        new_js = Math.max(minW, new_js - overflow);
+                    }
+                    // なお予算超過なら両方を収める
+                    if (new_py + new_js > budget) {
+                        const scale = budget / (new_py + new_js);
+                        new_py = Math.max(minW, new_py * scale);
+                        new_js = Math.max(minW, budget - new_py);
+                    }
+                }
+
+                if (new_py >= minW && new_js >= minW) {
+                    apply_footer_panel_flex(new_py, new_js);
                 }
             }, () => {
-                // onStart: ドラッグ開始時に全要素の現在の幅を取得し、固定幅モード(flex-grow:0)に移行させる
                 start_py_result_w = py_result_area_element.offsetWidth;
                 start_js_result_w = js_result_area_element.offsetWidth;
-                start_plot_w = extension_area_element.offsetWidth;
-
-                py_result_area_element.style.flex = `0 0 ${start_py_result_w}px`;
-                js_result_area_element.style.flex = `0 0 ${start_js_result_w}px`;
-                extension_area_element.style.flex = `0 0 ${start_plot_w}px`;
+                apply_footer_panel_flex(start_py_result_w, start_js_result_w);
             });
 
             // 5. js_result_width // (js_result_area <-> extension_area)
+            // js を固定、extension は grow で追従（plot 幅を固定しない）
             let start_js_result_w_2;
-            let start_plot_w_2;
-            let start_py_result_w_2; // 変数追加
+            let start_py_result_w_2;
 
             attach_drag_handler(footer_resizer_v2_element, (dx, dy) => {
-                const new_js_result_width = start_js_result_w_2 + dx;
-                const footer_width = footer_area_container_element.clientWidth;
+                const available = get_footer_content_width();
+                const resizer_total_width =
+                    footer_resizer_v_element.offsetWidth + footer_resizer_v2_element.offsetWidth;
+                const minW = 50;
+                const budget = available - resizer_total_width - minW; // py+js の上限（extension min 確保）
+                const pyFixed = start_py_result_w_2;
+                let new_js = start_js_result_w_2 + dx;
 
-                // 全体幅 - (左エリア固定幅 + 中央エリア新幅 + リサイザー合計幅) = 右エリア新幅
-                const resizer_total_width = footer_resizer_v_element.offsetWidth + footer_resizer_v2_element.offsetWidth;
-                const new_plot_width = footer_width - start_py_result_w_2 - new_js_result_width - resizer_total_width;
+                const maxJs = Math.max(minW, budget - pyFixed);
+                new_js = Math.min(maxJs, Math.max(minW, new_js));
 
-                if (new_js_result_width > 50 && new_plot_width > 50) {
-                    // flex-grow等を無効化しつつ幅を指定
-                    js_result_area_element.style.flex = `0 0 ${new_js_result_width}px`;
-                    extension_area_element.style.flex = `0 0 ${new_plot_width}px`;
+                if (pyFixed >= minW && new_js >= minW) {
+                    apply_footer_panel_flex(pyFixed, new_js);
                 }
             }, () => {
-                // onStart: 同様に全要素を固定幅モードへ
                 start_js_result_w_2 = js_result_area_element.offsetWidth;
-                start_plot_w_2 = extension_area_element.offsetWidth;
                 start_py_result_w_2 = py_result_area_element.offsetWidth;
-
-                py_result_area_element.style.flex = `0 0 ${start_py_result_w_2}px`;
-                js_result_area_element.style.flex = `0 0 ${start_js_result_w_2}px`;
-                extension_area_element.style.flex = `0 0 ${start_plot_w_2}px`;
+                apply_footer_panel_flex(start_py_result_w_2, start_js_result_w_2);
             });
+
+            // 親幅変化（AI サイドバー・ウィンドウリサイズ）で固定幅をクランプ
+            if (typeof ResizeObserver !== "undefined" && footer_area_container_element) {
+                const footerResizeObserver = new ResizeObserver(() => {
+                    clamp_footer_panel_widths();
+                });
+                footerResizeObserver.observe(footer_area_container_element);
+            } else {
+                window.addEventListener("resize", clamp_footer_panel_widths);
+            }
         }
 
         //-------------------------------------------------------- ### Footer_Resizer_Logic ###
         // footer_area_height (editor <-> footer)
         function setup_footer_resizer() {
             const footer = document.querySelector("footer");
+            const mainContent = document.getElementById("main_content");
             let start_h;
             attach_drag_handler(footer_resizer_h_element, (dx, dy) => {
                 // footerは上に伸ばすとdyがマイナスになるため反転
                 const newHeight = start_h - dy;
-                if (newHeight > 50 && newHeight < window.innerHeight - 100) {
+                const maxH = (mainContent ? mainContent.clientHeight : window.innerHeight) - 80;
+                if (newHeight > 50 && newHeight < maxH) {
                     footer.style.height = `${newHeight}px`;
+                    footer.style.flex = `0 0 ${newHeight}px`;
                 }
-            }, () => start_h = footer.offsetHeight);
+            }, () => {
+                start_h = footer.offsetHeight;
+            });
         }
 
         //-------------------------------------------------------- ### Editor_Drag&Drop_Logic ###
@@ -6385,24 +6515,42 @@ sys.stderr = Web_Stdout()
             // AIサイドバーの幅をリサイズする処理
             let startAiSidebarWidth;
             const ideFrameElement = document.getElementById("ide_container");
+            const mainWrapperElement = document.getElementById("main_wrapper");
+
+            // 利用可能幅に収まるようサイドバー幅をクランプ（iframe 側に最低幅を残す）
+            const clampAiSidebarWidth = (desiredWidth) => {
+                const minWidth = 150;
+                const minIdeWidth = 200; // IDE 本体の最低確保幅
+                const resizerWidth = aiSidebarResizerVElement ? aiSidebarResizerVElement.offsetWidth : 5;
+                const wrapperWidth = mainWrapperElement
+                    ? mainWrapperElement.clientWidth
+                    : window.innerWidth;
+                const maxWidth = Math.max(minWidth, wrapperWidth - resizerWidth - minIdeWidth);
+                const cappedByViewport = Math.min(desiredWidth, window.innerWidth * 0.7);
+                return Math.min(maxWidth, Math.max(minWidth, cappedByViewport));
+            };
 
             attachDragHandler(aiSidebarResizerVElement, (dx) => {
                 // 右側サイドバーは左方向へのドラッグ（dxがマイナス）で幅が広がるため減算する
-                const newWidth = startAiSidebarWidth - dx;
-                if (newWidth > 150) {
-                    aiSidebarElement.style.width = `${newWidth}px`;
-                }
+                const newWidth = clampAiSidebarWidth(startAiSidebarWidth - dx);
+                // flex-basis も同時指定し、flex 計算とのずれ（隙間）を防ぐ
+                aiSidebarElement.style.width = `${newWidth}px`;
+                aiSidebarElement.style.flex = `0 0 ${newWidth}px`;
             }, () => {
                 startAiSidebarWidth = aiSidebarElement.offsetWidth;
                 // ドラッグ開始時: 高速ドラッグでマウスがiframeに入り込んでも追従が切れないようガードする
                 if (ideFrameElement) {
                     ideFrameElement.style.pointerEvents = "none";
                 }
+                document.body.style.cursor = "ew-resize";
+                document.body.style.userSelect = "none";
             }, () => {
                 // ドラッグ終了時: iframeのポインタイベントを元の状態に戻す
                 if (ideFrameElement) {
-                    ideFrameElement.style.pointerEvents = "auto";
+                    ideFrameElement.style.pointerEvents = "";
                 }
+                document.body.style.cursor = "";
+                document.body.style.userSelect = "";
             });
 
             //-------------------------------------------------------- ### button_enabled_disabled ###
