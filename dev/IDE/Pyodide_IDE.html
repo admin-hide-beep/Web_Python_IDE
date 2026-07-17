@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pyodide_IDE(v1.12.031)</title>
+    <title>Pyodide_IDE(v1.12.034)</title>
     <link rel="icon" type="image/png" href="favicon.png">
 
     <meta http-equiv="Content-Security-Policy" content="
@@ -641,39 +641,39 @@
     <div id="github_modal_overlay" aria-hidden="true">
         <div id="github_modal" role="dialog" aria-labelledby="github_modal_title">
             <h2 id="github_modal_title">GitHub</h2>
-            <div class="github_modal_row" id="github_modal_user_row">未ログイン</div>
+            <div class="github_modal_row" id="github_modal_user_row" data-i18n="githubNotLoggedIn">未ログイン</div>
             <div class="github_modal_row">
-                <label for="github_repo_select">リポジトリ</label>
+                <label for="github_repo_select" data-i18n="githubRepoLabel">リポジトリ</label>
                 <select id="github_repo_select" disabled>
-                    <option value="">— ログイン後に一覧を取得 —</option>
+                    <option value="" data-i18n="githubRepoPlaceholder">— ログイン後に一覧を取得 —</option>
                 </select>
             </div>
             <div class="github_modal_row">
-                <label for="github_branch_input">ブランチ</label>
+                <label for="github_branch_input" data-i18n="githubBranchLabel">ブランチ</label>
                 <input id="github_branch_input" type="text" placeholder="main" disabled />
             </div>
             <div class="github_modal_row">
-                <label for="github_commit_message">コミットメッセージ (Push 時)</label>
+                <label for="github_commit_message" data-i18n="githubCommitLabel">コミットメッセージ (Push 時)</label>
                 <input id="github_commit_message" type="text" placeholder="Update from Pyodide IDE" disabled />
             </div>
             <div class="github_modal_actions">
-                <button type="button" id="github_modal_open" class="github_primary" disabled>Open in Explorer</button>
-                <button type="button" id="github_modal_push" disabled>Push</button>
-                <button type="button" id="github_modal_logout" disabled>Logout</button>
-                <button type="button" id="github_modal_close">Close</button>
+                <button type="button" id="github_modal_open" class="github_primary" disabled data-i18n="githubOpenExplorer">Open in Explorer</button>
+                <button type="button" id="github_modal_push" disabled data-i18n="githubPush">Push</button>
+                <button type="button" id="github_modal_logout" disabled data-i18n="githubLogout">Logout</button>
+                <button type="button" id="github_modal_close" data-i18n="githubClose">Close</button>
             </div>
             <div id="github_modal_status"></div>
         </div>
     </div>
 
     <div id="loader">
-        <div>Initializing Sandbox…</div>
+        <div data-i18n="loaderInit">Initializing Sandbox…</div>
     </div>
 
     <header>
         <div id="buttons">
             <!-- [≡] -->
-            <button id="toggle_sidebar" class="other_button_css" title="Toggle_Sidebar" disabled>
+            <button id="toggle_sidebar" class="other_button_css" title="Toggle_Sidebar" data-i18n-title="titleToggleSidebar" disabled>
                 <svg viewBox="0 0 512 512" width="16" height="16" fill="currentColor">
                     <g>
                         <rect y="16" width="96" height="96"></rect>
@@ -686,7 +686,7 @@
                 </svg>
             </button>
             <!-- [✧️] -->
-            <button id="toggle_ai_sidebar" class="other_button_css" title="Toggle AI Sidebar" disabled>
+            <button id="toggle_ai_sidebar" class="other_button_css" title="Toggle AI Sidebar" data-i18n-title="titleToggleAi" disabled>
                 <svg width="18" height="18" viewBox="0 0 100 100">
                     <defs>
                         <linearGradient id="geminiBrandGradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -703,7 +703,7 @@
             <button id="download_html" class="other_button_css" title="Download_html" style="display: none;"
                 disabled>DL</button>
             <!-- [⇩] -->
-            <button id="save_script" class="other_button_css" title="Save_Script" disabled>
+            <button id="save_script" class="other_button_css" title="Save_Script" data-i18n-title="titleSave" disabled>
                 <svg viewBox="0 0 48 48" width="22" height="22" fill="none" stroke="currentColor" stroke-width="4"
                     stroke-linecap="round" stroke-linejoin="round">
                     <g>
@@ -715,7 +715,7 @@
                 </svg>
             </button>
             <!-- [■] -->
-            <button id="stop_script" class="stop_button_css" title="STOP_Script" disabled>
+            <button id="stop_script" class="stop_button_css" title="STOP_Script" data-i18n-title="titleStop" disabled>
                 <svg viewBox="0 0 512 512" width="18" height="18" fill="currentColor">
                     <g>
                         <path
@@ -725,7 +725,7 @@
                 </svg>
             </button>
             <!-- [▶] -->
-            <button id="run_script" class="run_button_css" title="RUN_Script" disabled>
+            <button id="run_script" class="run_button_css" title="RUN_Script" data-i18n-title="titleRun" disabled>
                 <svg viewBox="0 0 512 512" width="18" height="18" fill="currentColor">
                     <g>
                         <path d="M256,0C114.625,0,0,114.625,0,256c0,141.374,114.625,256,256,256c141.374,0,256-114.626,256-256
@@ -770,7 +770,7 @@
                     </g>
                 </svg>
             </button>
-            <button id="serial_connect" class="other_button_css" title="serial_connect">
+            <button id="serial_connect" class="other_button_css" title="serial_connect" data-i18n-title="titleSerialConnect">
                 <svg viewBox="0 0 512 512" width="18" height="18" fill="currentColor">
                     <g>
                         <path
@@ -782,7 +782,7 @@
                     </g>
                 </svg>
             </button>
-            <button id="serial_cut" class="other_button_css" title="serial_cut" style="opacity: 0.5" disabled>
+            <button id="serial_cut" class="other_button_css" title="serial_cut" data-i18n-title="titleSerialCut" style="opacity: 0.5" disabled>
                 <svg viewBox="0 0 512 512" width="18" height="18" fill="currentColor">
                     <g>
                         <path
@@ -814,10 +814,10 @@
         <div id="ai_sidebar_resizer_v"></div>
         <div id="ai_sidebar" class="ai_sidebar_css">
             <div class="nano_header">
-                <span>AI Chat (Gemini Nano)</span>
+                <span data-i18n="aiChatTitle">AI Chat (Gemini Nano)</span>
                 <div class="nano_header_actions">
-                    <span id="nano-status">未起動</span>
-                    <button id="nano-reset-btn" title="セッションリセット" type="button">
+                    <span id="nano-status" data-i18n="nanoStatusIdle">未起動</span>
+                    <button id="nano-reset-btn" title="セッションリセット" data-i18n-title="nanoResetTitle" type="button">
                         <svg viewBox="0 0 512 512" width="14" height="14" fill="currentColor">
                             <g>
                                 <path class="st0" d="M499.795,195.596c-11.804-27.884-31.438-51.515-56.186-68.24c-24.717-16.724-54.739-26.526-86.773-26.518
@@ -844,10 +844,10 @@
                 </div>
             </div>
             <div id="nano-chat-container">
-                <div class="nano-msg nano-msg-hint">
+                <div class="nano-msg nano-msg-hint" data-i18n-hint="en" data-i18n="nanoHint">
                     You can launch Gemini nano and chat using the button below.
                 </div>
-                <div class="nano-msg nano-msg-hint">
+                <div class="nano-msg nano-msg-hint" data-i18n-hint="ja" data-i18n="nanoHint">
                     下のボタンから Gemini nano を起動し、チャット出来ます
                 </div>
             </div>
@@ -866,8 +866,8 @@
                     </select>
                 </div>
                 <div id="nano-chat-input-box">
-                    <textarea id="nano-user-input" placeholder="指令を入力... (Enterで送信)"></textarea>
-                    <button id="nano-send-btn" type="button">送信</button>
+                    <textarea id="nano-user-input" placeholder="指令を入力... (Enterで送信)" data-i18n-placeholder="nanoPlaceholder"></textarea>
+                    <button id="nano-send-btn" type="button" data-i18n="nanoSend">送信</button>
                 </div>
             </div>
         </div>
@@ -1545,7 +1545,7 @@
 	<body>
     <div id="loading_overlay">
 		<div class="spinner"></div>
-		<div id="loading_text">Loading...</div>
+		<div id="loading_text" data-i18n="loadingDefault">Loading...</div>
     </div>
     <header>
 		<div id="buttons">
@@ -1591,7 +1591,7 @@
 							</svg>
 						</button>
 						<!-- [GitHub] Script_Explorer アップロード左（ホストへ postMessage で中継） -->
-						<button id="github_connect" class="sidebar_button_css" title="GitHub" style="display: none;" disabled>
+						<button id="github_connect" class="sidebar_button_css" title="GitHub" data-i18n-title="titleGithub" style="display: none;" disabled>
 							<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
 								<path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
 									0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52
@@ -1603,7 +1603,7 @@
 							</svg>
 						</button>
 						<!-- [⇧] -->
-						<button id="script_upload" class="sidebar_button_css" title="Script_Folder_Upload">
+						<button id="script_upload" class="sidebar_button_css" title="Script_Folder_Upload" data-i18n-title="titleScriptUpload">
 							<svg viewBox="0 0 48 48" width="16" height="16" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
 								<g>
 									<polyline points="6 34.83 6 41.83 42 41.83 42 34.83"></polyline>
@@ -1614,7 +1614,7 @@
 							</svg>
 						</button>
 						<!-- [⟳] -->
-						<button id="refresh_script_explorer" class="sidebar_button_css" title="Refresh_Script">
+						<button id="refresh_script_explorer" class="sidebar_button_css" title="Refresh_Script" data-i18n-title="titleRefreshScript">
 							<svg viewBox="0 0 512 512" width="16" height="16" fill="currentColor">
 								<g>
 									<path class="st0" d="M499.795,195.596c-11.804-27.884-31.438-51.515-56.186-68.24c-24.717-16.724-54.739-26.526-86.773-26.518
@@ -1647,7 +1647,7 @@
 				<h3>
 					<div class="sidebar_button_container">
 						<!-- [⇧] -->
-						<button id="vfs_upload" class="sidebar_button_css" title="Folder_Upload">
+						<button id="vfs_upload" class="sidebar_button_css" title="Folder_Upload" data-i18n-title="titleVfsUpload">
 							<svg viewBox="0 0 48 48" width="16" height="16" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
 								<g>
 									<polyline points="6 34.83 6 41.83 42 41.83 42 34.83"></polyline>
@@ -1658,7 +1658,7 @@
 							</svg>
 						</button>
 						<!-- [⟳] -->
-						<button id="refresh_vfs_explorer" class="sidebar_button_css" title="Refresh_VFS">
+						<button id="refresh_vfs_explorer" class="sidebar_button_css" title="Refresh_VFS" data-i18n-title="titleRefreshVfs">
 							<svg viewBox="0 0 512 512" width="16" height="16" fill="currentColor">
 								<g>
 									<path class="st0" d="M499.795,195.596c-11.804-27.884-31.438-51.515-56.186-68.24c-24.717-16.724-54.739-26.526-86.773-26.518
@@ -1683,7 +1683,7 @@
 							</svg>
 						</button>
 						<!-- [x] -->
-						<button id="reset_vfs_explorer" class="sidebar_button_css" title="Reset_VFS">
+						<button id="reset_vfs_explorer" class="sidebar_button_css" title="Reset_VFS" data-i18n-title="titleResetVfs">
 							<svg viewBox="0 0 512 512" width="12" height="12" fill="currentColor">
 								<g>
 									<polygon class="st0" points="512,89.75 422.256,0.005 256.004,166.256 89.754,0.005 0,89.75 166.255,256 0,422.25 89.754,511.995
@@ -1732,6 +1732,142 @@
 
     <script id="script_global_variables">
         /* #################### ↓↓↓ script_global_variables ↓↓↓ #################### */
+
+        //-------------------------------------------------------- ### UI i18n (ホスト注入 uiLang) ###
+        // ホストの host_injected_constants で uiLang が渡される。未定義時は ja。
+        const ideUiLang = (typeof uiLang !== "undefined" && uiLang === "en") ? "en" : "ja";
+        try {
+            document.documentElement.lang = ideUiLang;
+        } catch (e) { /* ignore */ }
+
+        const ideUiMessages = {
+            ja: {
+                loadingDefault: "Loading...",
+                vfsResetConfirm: "VFS 内のすべてのファイル・フォルダを削除します。\nよろしいですか？",
+                vfsResetFailed: "VFSリセットに失敗しました:\n{message}",
+                zipSecurityAbort: "【セキュリティ警告】\n危険な形式のファイルが含まれているため、ZIP作成を中止しました。\n\n検出ファイル: {entry}",
+                zipCreateError: "ZIP作成エラー:\n{message}",
+                zipDecryptError: "解凍エラー: パスワードが違うか、ファイルが破損しています。\n{message}",
+                renameTab: "タブ名を変更（拡張子 '{ext}' は固定）",
+                serialFailed: "シリアル接続に失敗しました: {message}",
+                scriptExplorerHint: "ローカルスクリプトを参照するにはフォルダをアップロードしてください。",
+                cannotMoveParent: "親フォルダを自身の子フォルダへ移動できません。",
+                overwriteConfirm: "\"{name}\" は移動先に既に存在します。\n上書きしますか？",
+                moveFailed: "移動に失敗しました: {message}",
+                loadFailed: "読み込み失敗: {message}",
+                githubLoadRequestFailed: "GitHub ファイルの読み込み要求に失敗しました: {message}",
+                githubOpenFailed: "GitHub ファイルを開けませんでした: {message}",
+                pushFailed: "Push 失敗: {message}",
+                folderZipPrompt: "【Folder Download】: {name}\n\nZIPパスワードを入力してください。\n(空欄で非暗号化ZIP)",
+                encryptMethodConfirm: "【暗号化方式】\nパスワード: \"{pass}\"\n[OK]: Legacy ZipCrypto\n[キャンセル]: AES-256",
+                fileDownloadConfirm: "【File Download】\n\nFile: {name}\n\nダウンロードしますか？",
+                localFileLoadFailed: "ローカルファイルの読み込みに失敗しました: {message}",
+                vfsFileLoadFailed: "VFSファイルの読み込みに失敗しました: {message}",
+                folderLoadFailed: "フォルダの読み込みに失敗しました: {message}",
+                scriptFolderLoadFailed: "スクリプトフォルダの読み込みに失敗しました: {message}",
+                folderUploadFailed: "フォルダのアップロードに失敗しました: {message}",
+                pyodideNotReady: "Pyodide の準備ができていません。",
+                scanningVfs: "VFS をスキャン中: {path}...",
+                vfsEmpty: "VFS パス {path} は空です。「VFS_Upload」を使用してください。",
+                textLoadFailed: "テキストファイルの読み込みに失敗しました。\nバイナリファイル等は開けません。",
+                micropipConfirm: "未登録の外部ライブラリ '{mod}' が検出されました。\\nPyPI から直接ダウンロードしてインストールを試みますか？",
+                htmlPreviewDevOnly: "セキュリティのため、HTMLファイルのプレビューは開発モードでのみ許可されています。",
+                jsRunDevOnly: "セキュリティのため、JSファイルの直接実行は開発モードでのみ許可されています。",
+                readyBanner: "################################################\n# ★ 各種ロード完了\n# → [▶] ボタンでコードを実行できます\n################################################",
+                loadingGithubFile: "GitHub から読み込み中: {path}...",
+                loadingFile: "読み込み中: {name}...",
+                loadingVfsFile: "VFS から読み込み中: {name}...",
+                loadingScriptFolder: "スクリプトフォルダを読み込み中...",
+                loadingScriptFolderNamed: "スクリプトフォルダを読み込み中: {name}...",
+                newTabTitle: "新しいタブ",
+                titleScriptUpload: "スクリプトフォルダをアップロード",
+                titleRefreshScript: "Script を更新",
+                titleVfsUpload: "VFS へフォルダをアップロード",
+                titleRefreshVfs: "VFS を更新",
+                titleResetVfs: "VFS をリセット",
+                titleGithub: "GitHub"
+            },
+            en: {
+                loadingDefault: "Loading...",
+                vfsResetConfirm: "Delete all files and folders in the VFS?\nThis action clears the virtual filesystem root.",
+                vfsResetFailed: "Failed to reset VFS:\n{message}",
+                zipSecurityAbort: "[Security] ZIP creation aborted because a dangerous path/file form was detected.\n\nFile: {entry}",
+                zipCreateError: "ZIP creation error:\n{message}",
+                zipDecryptError: "Decrypt error: wrong password or the file is corrupted.\n{message}",
+                renameTab: "Rename tab (extension '{ext}' is fixed)",
+                serialFailed: "Serial connection failed: {message}",
+                scriptExplorerHint: "Upload a folder to browse local scripts.",
+                cannotMoveParent: "Cannot move a parent folder into its own child.",
+                overwriteConfirm: "\"{name}\" already exists in the destination.\nOverwrite?",
+                moveFailed: "Move failed: {message}",
+                loadFailed: "Load failed: {message}",
+                githubLoadRequestFailed: "Failed to request GitHub file load: {message}",
+                githubOpenFailed: "Could not open GitHub file: {message}",
+                pushFailed: "Push failed: {message}",
+                folderZipPrompt: "[Folder Download]: {name}\n\nEnter a ZIP password.\n(Leave empty for an unencrypted ZIP)",
+                encryptMethodConfirm: "[Encryption]\nPassword: \"{pass}\"\n[OK]: Legacy ZipCrypto\n[Cancel]: AES-256",
+                fileDownloadConfirm: "[File Download]\n\nFile: {name}\n\nDownload this file?",
+                localFileLoadFailed: "Failed to load local file: {message}",
+                vfsFileLoadFailed: "Failed to load VFS file: {message}",
+                folderLoadFailed: "Failed to load folder: {message}",
+                scriptFolderLoadFailed: "Failed to load script folder: {message}",
+                folderUploadFailed: "Failed to upload folder: {message}",
+                pyodideNotReady: "Pyodide is not ready.",
+                scanningVfs: "Scanning VFS at {path}...",
+                vfsEmpty: "VFS path {path} is empty. Use \"VFS_Upload\".",
+                textLoadFailed: "Failed to load as text.\nBinary files cannot be opened.",
+                micropipConfirm: "Unregistered external library '{mod}' was detected.\\nDownload and install it directly from PyPI?",
+                htmlPreviewDevOnly: "For security, HTML preview is only allowed in development mode.",
+                jsRunDevOnly: "For security, direct JS execution is only allowed in development mode.",
+                readyBanner: "################################################\n# ★ All components loaded\n# → Press [▶] to run your code\n################################################",
+                loadingGithubFile: "Loading {path} from GitHub...",
+                loadingFile: "Loading {name}...",
+                loadingVfsFile: "Loading {name} from VFS...",
+                loadingScriptFolder: "Loading Script Folder...",
+                loadingScriptFolderNamed: "Loading script folder: {name}...",
+                newTabTitle: "New tab",
+                titleScriptUpload: "Upload script folder",
+                titleRefreshScript: "Refresh Script",
+                titleVfsUpload: "Upload folder to VFS",
+                titleRefreshVfs: "Refresh VFS",
+                titleResetVfs: "Reset VFS",
+                titleGithub: "GitHub"
+            }
+        };
+
+        function t(key, vars) {
+            const pack = ideUiMessages[ideUiLang] || ideUiMessages.ja;
+            let s = (pack && pack[key]) || (ideUiMessages.ja && ideUiMessages.ja[key]) || key;
+            if (vars && typeof vars === "object") {
+                Object.keys(vars).forEach((k) => {
+                    s = s.split("{" + k + "}").join(String(vars[k]));
+                });
+            }
+            return s;
+        }
+
+        function applyIdeUiLanguage(root) {
+            const scope = root || document;
+            scope.querySelectorAll("[data-i18n]").forEach((el) => {
+                const key = el.getAttribute("data-i18n");
+                if (key) el.textContent = t(key);
+            });
+            scope.querySelectorAll("[data-i18n-title]").forEach((el) => {
+                const key = el.getAttribute("data-i18n-title");
+                if (key) el.setAttribute("title", t(key));
+            });
+            scope.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+                const key = el.getAttribute("data-i18n-placeholder");
+                if (key) el.setAttribute("placeholder", t(key));
+            });
+        }
+
+        applyIdeUiLanguage(document);
+        // Pyodide (Python) から定型 UI 文言を取るための公開
+        try { globalThis.__uiT = t; } catch (e) { /* ignore */ }
+        console.log("# IDE_frame_log : uiLang :", ideUiLang);
+
+
         //-------------------------------------------------------- ### global_variables
         var pyodide_js;
         let js_map_global_data = new Map();
@@ -1792,8 +1928,10 @@
         let spreadsheet_instances = {}; // CSVタブごとのスプレッドシートインスタンスを保持
 
         //-------------------------------------------------------- ### ローカルフォルダマウント関連
-        let mounted_dir_handle = null; // 現在マウントされているDirectoryHandle
-        let is_mounted = false; // マウント状態を追跡
+        // is_mounted / mounted_dir_handle は NativeFS（mountNativeFS）専用。
+        // memfs への Upload / DnD では立てない（中身の有無とは無関係）。
+        let mounted_dir_handle = null; // 現在 NativeFS で繋いでいる DirectoryHandle
+        let is_mounted = false; // NativeFS マウント中のみ true
         const MOUNT_PATH = "/mnt/vfs_root"; // PyodideのVFS内でマウントするパス
 
         //-------------------------------------------------------- ### GitHub Explorer 状態（トークンは保持しない）
@@ -2082,7 +2220,7 @@ await main_async_def()
                                 const warning = `Security Alert: Blocked forbidden file extension "${ext}" in file: ${full_vfs_path}`;
                                 console.error(warning);
                                 js_result_area_element.value = warning;
-                                alert(`【セキュリティ警告】\n危険な形式のファイルが含まれているため、ZIP作成を中止しました。\n\n検出ファイル: ${entry}`);
+                                alert(t("zipSecurityAbort", { entry: entry }));
                                 return false; // 検知
                             }
                         }
@@ -2160,7 +2298,7 @@ await main_async_def()
             } catch (err) {
                 console.error("Zip Error:", err);
                 js_result_area_element.value = `Error: ${err.message}`;
-                alert(`ZIP作成エラー:\n${err.message}`);
+                alert(t("zipCreateError", { message: err.message }));
 
             } finally {
                 if (zip_writer) { // エラー発生時など、まだ閉じられていない場合のみ実行
@@ -2245,7 +2383,7 @@ await main_async_def()
                 js_result_area_element.value = "Decrypt Error:" + err;
                 console.error("Decrypt Error:", err);
                 js_result_area_element.value = `Error: ${err.message}`;
-                alert(`解凍エラー: パスワードが違うか、ファイルが破損しています。\n${err.message}`);
+                alert(t("zipDecryptError", { message: err.message }));
 
             } finally {
                 // エラー発生時でも確実に close する
@@ -2497,6 +2635,14 @@ await main_async_def()
                     }
                 }
 
+                //-------------------------------------------------------- ### Agent_VFS_Tree（構造取得・Python実行なし）
+                else if (data.cmd === "agent_vfs_tree") {
+                    handle_agent_vfs_tree_request({
+                        path: data.path,
+                        maxDepth: data.maxDepth
+                    });
+                }
+
                 return; // host_frameからのメッセージ処理終了
             }
 
@@ -2585,7 +2731,7 @@ await main_async_def()
         });
 
         //-------------------------------------------------------- ### Loading_制御関数 ###
-        function toggle_loading(is_loading, text = "Loading...") {
+        function toggle_loading(is_loading, text = t("loadingDefault")) {
             const overlay = document.getElementById("loading_overlay");
             const msg_el = document.getElementById("loading_text");
 
@@ -2657,39 +2803,17 @@ await main_async_def()
         //-------------------------------------------------------- ### Reset_VFS_Button ###
         if (reset_vfs_button) {
             reset_vfs_button.addEventListener("click", () => {
-                const ok = confirm("VFS 内のすべてのファイル・フォルダを削除します。\nよろしいですか？");
+                const ok = confirm(t("vfsResetConfirm"));
                 if (!ok) return;
 
                 try {
-                    // CWD (カレントディレクトリ) が削除対象の中にあるとエラーになるため、一旦ルートに移動
-                    try { pyodide_js.FS.chdir("/"); } catch (e) { console.warn("chdir / failed", e); }
-
-                    // --- 1. NativeFS がマウントされていれば解除 ---
-                    if (is_mounted) {
-                        if (mounted_dir_handle) {
-                            const prev = `${MOUNT_PATH}/${mounted_dir_handle.name}`;
-                            try { pyodide_js.FS.unmount(prev); } catch (e) { }
-                        }
-                        try { pyodide_js.FS.unmount(MOUNT_PATH); } catch (e) { }
-                        is_mounted = false;
-                        mounted_dir_handle = null;
-                    }
-                    remove_directory_recursive_vfs(MOUNT_PATH); // --- 2. VFSの実データを完全削除 ---
-                    pyodide_js.FS.mkdirTree(MOUNT_PATH); // --- 3. ルートフォルダを作り直し ---
-
-                    // 削除後にPython側のCWDを再度 MOUNT_PATH に戻しておく
-                    try {
-                        pyodide_js.FS.chdir(MOUNT_PATH);
-                        // Python側の os.getcwd() も同期させるために runPython を実行
-                        pyodide_js.runPython(`import os; os.chdir('${MOUNT_PATH}')`);
-                    } catch (e) { console.warn("chdir back failed", e); }
-
-                    refresh_vfs_explorer_view(); // --- 4. 画面を更新 ---
+                    // NativeFS unmount + memfs 全削除（フラグ非依存）。CWD も MOUNT_PATH に戻す
+                    clear_vfs_root({ restoreCwd: true });
+                    refresh_vfs_explorer_view();
                     js_result_area_element.value = "VFS was reset.";
-
                 } catch (err) {
                     console.error("VFS Reset Error:", err);
-                    alert(`VFSリセットに失敗しました:\n${err.message}`);
+                    alert(t("vfsResetFailed", { message: err.message }));
                 }
             });
         }
@@ -2847,7 +2971,7 @@ await main_async_def()
                     ext_name = old_name.substring(last_dot_idx);
                 }
                 // プロンプトには拡張子を除いた名前を表示し、メッセージで拡張子が固定であることを伝える
-                const input_base_name = prompt(`Rename tab (extension '${ext_name}' is fixed)`, base_name);
+                const input_base_name = prompt(t("renameTab", { ext: ext_name }), base_name);
                 // キャンセル・空文字は無視
                 if (!input_base_name) return;
                 // ユーザー入力値と元の拡張子を結合
@@ -3062,7 +3186,7 @@ async function setup_web_serial() {
             js_result_area_element.value = "clicked_new_btn..."
 		} catch (e) {
             console.error("Serial Connection Failed:", e);
-            alert("Serial Connection Failed: " + e);
+            alert(t("serialFailed", { message: e }));
 		}
 	};
 
@@ -3238,7 +3362,7 @@ setup_web_serial();
             tab_plus_button_element = document.createElement("div");
             tab_plus_button_element.className = "tab_plus_btn";
             tab_plus_button_element.textContent = "[+]";
-            tab_plus_button_element.title = "New_Tab";
+            tab_plus_button_element.title = t("newTabTitle");
             tab_plus_button_element.addEventListener("click", () => { open_tab("Untitled", "") });
             tab_bar_element.appendChild(tab_plus_button_element);
         }
@@ -3393,7 +3517,7 @@ setup_web_serial();
             }
             if (!scriptExplorerState.tree || scriptExplorerState.tree.length === 0) {
                 if (type !== "github") {
-                    script_explorer_element.textContent = "Use 'script_dir' to browse local scripts.";
+                    script_explorer_element.textContent = t("scriptExplorerHint");
                 }
                 return;
             }
@@ -3632,7 +3756,7 @@ setup_web_serial();
             // 親を子へ入れる循環を禁止
             const normalized_src = src_path.endsWith("/") ? src_path : src_path + "/";
             if (dest === src_path || (dest && dest.startsWith(normalized_src))) {
-                alert("Cannot move a parent folder into its own child.");
+                alert(t("cannotMoveParent"));
                 return;
             }
 
@@ -3658,7 +3782,7 @@ setup_web_serial();
                 // 同名衝突
                 const conflict = dest_children.find((n) => n.name === moving.name);
                 if (conflict) {
-                    if (!confirm(`"${moving.name}" already exists in destination.\nOverwrite?`)) {
+                    if (!confirm(t("overwriteConfirm", { name: moving.name }))) {
                         // キャンセル時は元の親へ戻す
                         detached.parentList.push(moving);
                         sort_script_tree_nodes(tree);
@@ -3677,7 +3801,7 @@ setup_web_serial();
                 js_result_area_element.value = `Moved: ${src_path} -> ${dest ? dest + "/" : ""}${file_name}`;
             } catch (err) {
                 console.error("Script Move Error:", err);
-                alert(`Move Failed: ${err.message}`);
+                alert(t("moveFailed", { message: err.message }));
                 // 状態が壊れている可能性があるので再描画
                 if (scriptExplorerState.tree) {
                     set_script_explorer_tree("local_upload", scriptExplorerState.tree);
@@ -3714,7 +3838,7 @@ setup_web_serial();
             } catch (err) {
                 console.error(`Error loading ${file_name}:`, err);
                 js_result_area_element.value = `Error: ${err.message}`;
-                alert(`読み込み失敗: ${err.message}`);
+                alert(t("loadFailed", { message: err.message }));
             }
         }
 
@@ -3744,13 +3868,13 @@ setup_web_serial();
 
                 // ローカル環境: デフォルトメッセージを表示
                 scriptExplorerState = { type: null, tree: null };
-                script_explorer_element.textContent = "Use 'script_dir' to browse local scripts.";
+                script_explorer_element.textContent = t("scriptExplorerHint");
                 toggle_loading(false); // ローディング表示終了
 
             } catch (err) {
                 console.error(`Error Refreshing Script Tree:`, err);
                 js_result_area_element.value = `Error: ${err.message}`;
-                alert(`読み込み失敗: ${err.message}`);
+                alert(t("loadFailed", { message: err.message }));
                 toggle_loading(false);
             }
         }
@@ -3761,11 +3885,11 @@ setup_web_serial();
                 if (!filePath) {
                     throw new Error("GitHub file path is empty.");
                 }
-                js_result_area_element.value = `Loading ${filePath} from GitHub...`;
+                js_result_area_element.value = t("loadingGithubFile", { path: filePath });
                 js_post_message("github_file_request", "host", "*", { path: filePath }, []);
             } catch (err) {
                 js_result_area_element.value = `Error: ${err.message}`;
-                alert(`GitHub ファイルの読み込み要求に失敗しました: ${err.message}`);
+                alert(t("githubLoadRequestFailed", { message: err.message }));
             }
         }
 
@@ -3799,7 +3923,7 @@ setup_web_serial();
                     // GitHub セッション終了時は Script ツリーもクリア
                     if (scriptExplorerState.type === "github") {
                         scriptExplorerState = { type: null, tree: null };
-                        script_explorer_element.textContent = "Use 'script_dir' to browse local scripts.";
+                        script_explorer_element.textContent = t("scriptExplorerHint");
                     }
                 }
                 return true;
@@ -3847,7 +3971,7 @@ setup_web_serial();
                 } catch (err) {
                     console.error(err);
                     js_result_area_element.value = `GitHub file open error: ${err.message}`;
-                    alert(`GitHub ファイルを開けませんでした: ${err.message}`);
+                    alert(t("githubOpenFailed", { message: err.message }));
                 }
                 return true;
             }
@@ -3859,7 +3983,7 @@ setup_web_serial();
                 if (ok) {
                     alert(msg);
                 } else {
-                    alert("Push 失敗: " + msg);
+                    alert(t("pushFailed", { message: msg }));
                 }
                 return true;
             }
@@ -4007,7 +4131,7 @@ setup_web_serial();
                         handle_explorer_item_click(row_div); // ★ 右クリック時も選択色を適用
 
                         const user_pass = window.prompt(
-                            `【Folder Download】: ${item.name}\n\nZIPパスワードを入力してください。\n(空欄で非暗号化ZIP)`
+                            t("folderZipPrompt", { name: item.name })
                         );
 
                         if (user_pass === null) return;
@@ -4017,7 +4141,7 @@ setup_web_serial();
                                 js_encrypt_zipper(item.vfs_path, item.name + ".zip", null, false);
                             }
                         } else {
-                            const use_legacy = window.confirm(`【暗号化方式】\nパスワード: "${user_pass}"\n[OK]: Legacy ZipCrypto\n[キャンセル]: AES-256`);
+                            const use_legacy = window.confirm(t("encryptMethodConfirm", { pass: user_pass }));
                             if (typeof js_encrypt_zipper === "function") {
                                 js_encrypt_zipper(item.vfs_path, item.name + ".zip", user_pass, use_legacy);
                             }
@@ -4030,7 +4154,7 @@ setup_web_serial();
                         e.stopPropagation();
                         handle_explorer_item_click(row_div); // ★ 右クリック時も選択色を適用
 
-                        const do_download = window.confirm(`【File Download】\n\nFile: ${item.name}\n\nダウンロードしますか？`);
+                        const do_download = window.confirm(t("fileDownloadConfirm", { name: item.name }));
                         if (do_download) {
                             if (typeof js_download_vfs_file === "function") {
                                 js_download_vfs_file(item.vfs_path);
@@ -4116,7 +4240,7 @@ setup_web_serial();
         //-------------------------------------------------------- ### ローカルマウントから読み込む ###
         async function load_local_file_content_from_handle(file_handle, file_name) {
             try {
-                js_result_area_element.value = `Loading ${file_name}...`;
+                js_result_area_element.value = t("loadingFile", { name: file_name });
                 file_name_val = file_name;
 
                 const file = await file_handle.getFile();
@@ -4125,7 +4249,7 @@ setup_web_serial();
 
             } catch (err) {
                 js_result_area_element.value = `Error: ${err.message}`;
-                alert(`ローカルファイルの読み込みに失敗しました: ${err.message}`);
+                alert(t("localFileLoadFailed", { message: err.message }));
             }
         }
 
@@ -4137,7 +4261,7 @@ setup_web_serial();
                 return;
             }
             try {
-                js_result_area_element.value = `Loading ${file_name}...`;
+                js_result_area_element.value = t("loadingFile", { name: file_name });
                 file_name_val = file_name;
 
                 const content = await file_object.text();
@@ -4146,7 +4270,7 @@ setup_web_serial();
 
             } catch (err) {
                 js_result_area_element.value = `Error: ${err.message}`;
-                alert(`ローカルファイルの読み込みに失敗しました: ${err.message}`);
+                alert(t("localFileLoadFailed", { message: err.message }));
             }
         }
 
@@ -4156,7 +4280,7 @@ setup_web_serial();
                 if (!pyodide_js || !pyodide_js.FS) {
                     throw new Error("Pyodide FS not available.");
                 }
-                js_result_area_element.value = `Loading ${file_name} from VFS...`;
+                js_result_area_element.value = t("loadingVfsFile", { name: file_name });
                 file_name_val = file_name;
 
                 const data = pyodide_js.FS.readFile(vfs_path);
@@ -4166,7 +4290,7 @@ setup_web_serial();
 
             } catch (err) {
                 js_result_area_element.value = `Error: ${err.message}`;
-                alert(`VFSファイルの読み込みに失敗しました: ${err.message}`);
+                alert(t("vfsFileLoadFailed", { message: err.message }));
                 console.error(err);
             }
         }
@@ -4211,31 +4335,8 @@ setup_web_serial();
 
                 const folder_name = dir_handle.name; // 例: "Data"
 
-                // 1. 既存のマウントがあればアンマウント
-                if (is_mounted) {
-                    // 前回マウントしたディレクトリパスをアンマウント
-                    if (mounted_dir_handle) {
-                        const prev_mount_path = `${MOUNT_PATH}/${mounted_dir_handle.name}`;
-                        try {
-                            pyodide_js.FS.unmount(prev_mount_path);
-                            console.log(`Unmounted: ${prev_mount_path}`);
-                        } catch (e) {
-                            console.warn("Unmount specific path failed:", e);
-                        }
-                    }
-
-                    // 念のためルートのマウントもチェック（古いロジック対策）
-                    try {
-                        pyodide_js.FS.unmount(MOUNT_PATH);
-                    } catch (e) { }
-
-                    // VFS内を掃除 (vfs_dirの中身を空にする)
-                    // マウント解除後も空フォルダが残る場合があるため
-                    remove_directory_recursive_vfs(MOUNT_PATH);
-                    pyodide_js.FS.mkdirTree(MOUNT_PATH); // ルート再作成
-
-                    is_mounted = false;
-                }
+                // 既存 NativeFS / memfs を必ず空にしてからマウント（フラグに依存しない）
+                clear_vfs_root();
 
                 js_result_area_element.value = `Mounting local folder: ${folder_name}...`;
 
@@ -4245,7 +4346,7 @@ setup_web_serial();
                 // マウントポイント（空フォルダ）を作成
                 pyodide_js.FS.mkdirTree(target_mount_path);
 
-                // NativeFSマウント実行
+                // NativeFSマウント実行（is_mounted を true にしてよい唯一の成功パス）
                 await pyodide_js.mountNativeFS(target_mount_path, dir_handle);
 
                 mounted_dir_handle = dir_handle; // ハンドルを保存（次回アンマウント用）
@@ -4261,7 +4362,7 @@ setup_web_serial();
                 if (error.name !== "AbortError") {
                     console.error("Error opening local folder:", error);
                     js_result_area_element.value = `Error: ${error.message}`;
-                    alert(`フォルダの読み込みに失敗しました: ${error.message}`);
+                    alert(t("folderLoadFailed", { message: error.message }));
                 }
             } finally {
                 toggle_loading(false); // ローディング表示終了
@@ -4274,8 +4375,8 @@ setup_web_serial();
                 const dir_handle = await window.showDirectoryPicker();
                 if (!dir_handle) return; // ユーザーがキャンセルした場合
 
-                toggle_loading(true, "Loading Script Folder..."); // ローディング表示開始
-                js_result_area_element.value = `Loading script folder: ${dir_handle.name}...`;
+                toggle_loading(true, t("loadingScriptFolder")); // ローディング表示開始
+                js_result_area_element.value = t("loadingScriptFolderNamed", { name: dir_handle.name });
 
                 // エクスプローラーの描画 (VFSにはマウントしない)
                 const tree = await create_tree_from_directory(dir_handle);
@@ -4289,7 +4390,7 @@ setup_web_serial();
                 if (error.name !== "AbortError") {
                     console.error("Error opening script folder:", error);
                     js_result_area_element.value = `Error: ${error.message}`;
-                    alert(`スクリプトフォルダの読み込みに失敗しました: ${error.message}`);
+                    alert(t("scriptFolderLoadFailed", { message: error.message }));
                 }
             } finally {
                 toggle_loading(false); // ローディング表示終了
@@ -4344,6 +4445,43 @@ setup_web_serial();
             } else if (pyodide_js.FS.isFile(stat.mode)) {
                 // ファイルの場合
                 pyodide_js.FS.unlink(path); // ファイルを削除
+            }
+        }
+
+        /**
+         * VFS ルートを空にする共通処理。
+         * - NativeFS 中なら先に unmount（handle があるときのみ）
+         * - memfs の中身は is_mounted に依らず再帰削除
+         * - Upload 全置換 / 再マウント前 / Reset から呼ぶ
+         * - DnD（追加書き込み）からは呼ばない
+         * @param {{ restoreCwd?: boolean }} options restoreCwd=true で CWD を MOUNT_PATH に戻す
+         */
+        function clear_vfs_root(options = {}) {
+            const restoreCwd = options.restoreCwd === true;
+
+            // 削除対象上に CWD があると失敗しやすい
+            try { pyodide_js.FS.chdir("/"); } catch (e) { console.warn("chdir / failed", e); }
+
+            // NativeFS のみ unmount（本物のマウントは handle で判定）
+            if (mounted_dir_handle) {
+                const prev = `${MOUNT_PATH}/${mounted_dir_handle.name}`;
+                try { pyodide_js.FS.unmount(prev); } catch (e) { /* 未マウント可 */ }
+                try { pyodide_js.FS.unmount(MOUNT_PATH); } catch (e) { /* 同上 */ }
+            }
+
+            // フラグは NativeFS 専用。クリア後は必ず下ろす
+            mounted_dir_handle = null;
+            is_mounted = false;
+
+            try { remove_directory_recursive_vfs(MOUNT_PATH); } catch (e) { /* 未作成可 */ }
+            try { pyodide_js.FS.mkdirTree(MOUNT_PATH); } catch (e) { /* 既存可 */ }
+
+            if (restoreCwd) {
+                try {
+                    pyodide_js.FS.chdir(MOUNT_PATH);
+                    // Python 側の os.getcwd() も同期
+                    pyodide_js.runPython(`import os; os.chdir('${MOUNT_PATH}')`);
+                } catch (e) { console.warn("chdir back failed", e); }
             }
         }
 
@@ -4444,35 +4582,13 @@ setup_web_serial();
                 }
             }
 
-            // VFSのマウントポイント
+            // VFSのマウントポイント（memfs への全置換。NativeFS フラグは立てない）
             const mount_point = MOUNT_PATH;
             js_result_area_element.value = `Uploading "${root_folder_name}" to VFS (${mount_point})...`;
 
             try {
-                // 既存のマウント/アップロードがあればクリア (vfs_dirの中身を空にする)
-                if (is_mounted) {
-                    try {
-                        // 前回がNativeFSマウントだった場合のアンマウント試行
-                        // (具体的なマウントパスが不明なため、MOUNT_PATH直下等を想定)
-                        // 今回のロジック変更に伴い、念のため再帰削除でクリーンアップします
-                        if (mounted_dir_handle) {
-                            const prev_mount = `${MOUNT_PATH}/${mounted_dir_handle.name}`;
-                            try { pyodide_js.FS.unmount(prev_mount); } catch (e) { }
-                        }
-                        try { pyodide_js.FS.unmount(MOUNT_PATH); } catch (e) { }
-                    } catch (e_unmount) {
-                        console.warn("Unmount failed (proceeding):", e_unmount.message);
-                    }
-                }
-
-                // VFSのリセット (vfs_dir自体を作り直す)
-                try {
-                    remove_directory_recursive_vfs(mount_point);
-                } catch (e) { console.log("Cleanup vfs info:", e); }
-
-                try {
-                    pyodide_js.FS.mkdirTree(mount_point);
-                } catch (e) { } // 既に存在すればOK
+                // 全置換: 既存 NativeFS / memfs を空にしてから書き込む
+                clear_vfs_root();
 
                 // ファイルをVFSに書き込む
                 for (const file of files) {
@@ -4496,9 +4612,7 @@ setup_web_serial();
                     pyodide_js.FS.writeFile(vfs_path, data);
                 }
 
-                is_mounted = true; // アップロード完了
-                mounted_dir_handle = null; // NativeFSではないためnull
-
+                // is_mounted は触らない（memfs のみ。NativeFS 専用フラグ）
                 refresh_vfs_explorer_view();
 
                 js_result_area_element.value = `Folder "${root_folder_name}" uploaded to ${mount_point}.`;
@@ -4506,7 +4620,7 @@ setup_web_serial();
             } catch (error) {
                 console.error("Error uploading folder to VFS:", error);
                 js_result_area_element.value = `Error: ${error.message}`;
-                alert(`フォルダのアップロードに失敗しました: ${error.message}`);
+                alert(t("folderUploadFailed", { message: error.message }));
 
             } finally {
                 toggle_loading(false); // ローディング表示終了
@@ -4566,10 +4680,10 @@ setup_web_serial();
         // VFSエクスプローラーを更新する
         function refresh_vfs_explorer_view() {
             if (!pyodide_js || !pyodide_js.FS) {
-                vfs_explorer_element.textContent = "Pyodide not ready.";
+                vfs_explorer_element.textContent = t("pyodideNotReady");
                 return;
             }
-            vfs_explorer_element.textContent = `Scanning VFS at ${MOUNT_PATH}...`;
+            vfs_explorer_element.textContent = t("scanningVfs", { path: MOUNT_PATH });
             const tree = create_tree_from_vfs(MOUNT_PATH);
 
             // VFSの /mnt/vfs_root の *中身* ではなく、/mnt/vfs_root フォルダ自体をツリーのルートとして表示
@@ -4586,12 +4700,280 @@ setup_web_serial();
             render_file_explorer(wrapper_tree, "vfs", vfs_explorer_element);
 
             if (tree.length === 0) {
-                vfs_explorer_element.textContent = `VFS path ${MOUNT_PATH} is empty. Use "VFS_Upload".`;
+                vfs_explorer_element.textContent = t("vfsEmpty", { path: MOUNT_PATH });
             }
 
             // ホスト DnD オーバーレイ位置を更新
             if (typeof report_all_explorer_drop_zone_rects === "function") {
                 report_all_explorer_drop_zone_rects();
+            }
+        }
+
+        //-------------------------------------------------------- ### Agent 向け VFS ツリー取得 ###
+        /**
+         * エージェント要求パスを正規化し、MOUNT_PATH 配下に制限する
+         * @param {string|null|undefined} requestPath
+         * @returns {{ ok: true, path: string } | { ok: false, error: string }}
+         */
+        function resolve_agent_vfs_path(requestPath) {
+            const mountPath = MOUNT_PATH;
+            let raw = (requestPath == null || String(requestPath).trim() === "")
+                ? mountPath
+                : String(requestPath).trim();
+
+            // 区切りを統一し、相対パスはルート配下として解釈
+            raw = raw.replace(/\\/g, "/").replace(/\/+/g, "/");
+            if (!raw.startsWith("/")) {
+                raw = mountPath + "/" + raw;
+            }
+            if (raw.length > 1 && raw.endsWith("/")) {
+                raw = raw.slice(0, -1);
+            }
+
+            // "." / ".." を解決
+            const segments = raw.split("/");
+            const stack = [];
+            for (let i = 0; i < segments.length; i++) {
+                const seg = segments[i];
+                if (seg === "" || seg === ".") continue;
+                if (seg === "..") {
+                    if (stack.length > 0) stack.pop();
+                } else {
+                    stack.push(seg);
+                }
+            }
+            const resolved = "/" + stack.join("/");
+
+            // サンドボックス: /mnt/vfs_root 外は拒否
+            if (resolved !== mountPath && !resolved.startsWith(mountPath + "/")) {
+                return {
+                    ok: false,
+                    error: `Path not allowed outside ${mountPath}: ${requestPath}`
+                };
+            }
+            return { ok: true, path: resolved };
+        }
+
+        /**
+         * 深さ制限付きで VFS ツリーを構築（Agent 用・UI 描画とは独立）
+         * @param {string} path - 走査ディレクトリ
+         * @param {number} maxDepth - 最大深さ（開始パス直下を depth 0 として数える）
+         * @param {number} depth - 現在深さ
+         * @param {{ truncated: boolean }} truncState - 打ち切りフラグ共有オブジェクト
+         * @returns {Array}
+         */
+        function create_tree_from_vfs_limited(path, maxDepth, depth, truncState) {
+            const tree = [];
+
+            // 深さ上限: これ以上は中身を列挙せず、残があれば truncated
+            if (depth >= maxDepth) {
+                try {
+                    const rest = pyodide_js.FS.readdir(path).filter(function (entry) {
+                        return entry !== "." && entry !== "..";
+                    });
+                    if (rest.length > 0) truncState.truncated = true;
+                } catch (e) {
+                    // 読めない場合は打ち切り判定のみスキップ
+                }
+                return tree;
+            }
+
+            let entries;
+            try {
+                const stat = pyodide_js.FS.stat(path);
+                if (!pyodide_js.FS.isDir(stat.mode)) {
+                    return [];
+                }
+                entries = pyodide_js.FS.readdir(path);
+            } catch (e) {
+                return [];
+            }
+
+            entries.forEach(function (entry) {
+                if (entry === "." || entry === "..") return;
+
+                const fullPath = path + "/" + entry;
+                let entryStat;
+                try {
+                    entryStat = pyodide_js.FS.stat(fullPath);
+                } catch (e) {
+                    return;
+                }
+
+                const item = {
+                    name: entry,
+                    handle: null,
+                    vfs_path: fullPath
+                };
+
+                if (pyodide_js.FS.isDir(entryStat.mode)) {
+                    item.type = "folder";
+                    item.children = create_tree_from_vfs_limited(
+                        fullPath,
+                        maxDepth,
+                        depth + 1,
+                        truncState
+                    );
+                } else {
+                    item.type = "file";
+                }
+                tree.push(item);
+            });
+
+            tree.sort(function (a, b) {
+                if (a.type === b.type) return a.name.localeCompare(b.name);
+                return a.type === "folder" ? -1 : 1;
+            });
+
+            return tree;
+        }
+
+        /**
+         * ツリー内のファイル数・ディレクトリ数を数える
+         * @param {Array} items
+         * @returns {{ fileCount: number, dirCount: number }}
+         */
+        function count_vfs_tree_nodes(items) {
+            let fileCount = 0;
+            let dirCount = 0;
+
+            function walk(list) {
+                if (!list || !list.length) return;
+                for (let i = 0; i < list.length; i++) {
+                    const item = list[i];
+                    if (item.type === "folder") {
+                        dirCount++;
+                        walk(item.children);
+                    } else {
+                        fileCount++;
+                    }
+                }
+            }
+
+            walk(items);
+            return { fileCount: fileCount, dirCount: dirCount };
+        }
+
+        /**
+         * tree コマンド風のプレーンテキストに整形（LLM 可読・トークン節約）
+         * @param {string} rootLabel - ルート表示パス
+         * @param {Array} children
+         * @returns {string}
+         */
+        function format_vfs_tree_text(rootLabel, children) {
+            const lines = [];
+            const rootDisplay = rootLabel.endsWith("/") ? rootLabel : (rootLabel + "/");
+            lines.push(rootDisplay);
+
+            function walk(list, prefix) {
+                if (!list || !list.length) return;
+                for (let i = 0; i < list.length; i++) {
+                    const item = list[i];
+                    const isLast = i === list.length - 1;
+                    const branch = isLast ? "└── " : "├── ";
+                    const childPrefix = isLast ? "    " : "│   ";
+                    if (item.type === "folder") {
+                        lines.push(prefix + branch + item.name + "/");
+                        walk(item.children, prefix + childPrefix);
+                    } else {
+                        lines.push(prefix + branch + item.name);
+                    }
+                }
+            }
+
+            walk(children, "");
+            return lines.join("\n");
+        }
+
+        /**
+         * Agent からの VFS 構造取得要求を処理し、Host へ vfs_tree_result を返す
+         * @param {{ path?: string, maxDepth?: number }} options
+         */
+        function handle_agent_vfs_tree_request(options) {
+            const opts = options || {};
+            const fallbackPath = opts.path || MOUNT_PATH;
+
+            try {
+                if (!pyodide_js || !pyodide_js.FS) {
+                    js_post_message("vfs_tree_result", "host", "*", {
+                        path: fallbackPath,
+                        error: "Pyodide is not ready"
+                    }, []);
+                    return;
+                }
+
+                const resolved = resolve_agent_vfs_path(opts.path);
+                if (!resolved.ok) {
+                    js_post_message("vfs_tree_result", "host", "*", {
+                        path: fallbackPath,
+                        error: resolved.error
+                    }, []);
+                    return;
+                }
+
+                // maxDepth: 省略時 8、0〜20 にクランプ
+                let maxDepth = Number(opts.maxDepth);
+                if (!Number.isFinite(maxDepth)) maxDepth = 8;
+                maxDepth = Math.max(0, Math.min(20, Math.floor(maxDepth)));
+
+                let pathStat;
+                try {
+                    pathStat = pyodide_js.FS.stat(resolved.path);
+                } catch (e) {
+                    js_post_message("vfs_tree_result", "host", "*", {
+                        path: resolved.path,
+                        error: "Path not found: " + resolved.path
+                    }, []);
+                    return;
+                }
+
+                // ファイルを直接指定された場合は名前のみ返す
+                if (!pyodide_js.FS.isDir(pathStat.mode)) {
+                    const fileName = resolved.path.split("/").pop() || resolved.path;
+                    js_post_message("vfs_tree_result", "host", "*", {
+                        path: resolved.path,
+                        tree: fileName,
+                        fileCount: 1,
+                        dirCount: 0,
+                        truncated: false,
+                        maxDepth: maxDepth
+                    }, []);
+                    return;
+                }
+
+                const truncState = { truncated: false };
+                const children = create_tree_from_vfs_limited(
+                    resolved.path,
+                    maxDepth,
+                    0,
+                    truncState
+                );
+                const counts = count_vfs_tree_nodes(children);
+
+                let treeText;
+                if (children.length === 0 && !truncState.truncated) {
+                    treeText = resolved.path + "/\n(empty)";
+                } else {
+                    treeText = format_vfs_tree_text(resolved.path, children);
+                    if (truncState.truncated) {
+                        treeText += "\n… (truncated by maxDepth)";
+                    }
+                }
+
+                js_post_message("vfs_tree_result", "host", "*", {
+                    path: resolved.path,
+                    tree: treeText,
+                    fileCount: counts.fileCount,
+                    dirCount: counts.dirCount,
+                    truncated: truncState.truncated,
+                    maxDepth: maxDepth
+                }, []);
+                console.log("# IDE_frame_log : vfs_tree_result :", resolved.path);
+            } catch (err) {
+                js_post_message("vfs_tree_result", "host", "*", {
+                    path: fallbackPath,
+                    error: String(err && err.message ? err.message : err)
+                }, []);
             }
         }
 
@@ -5040,7 +5422,7 @@ json.dumps(result)
                 } catch (err) {
                     console.error("File Read Error:", err);
                     js_result_area_element.value = "Error: Failed to read file text.";
-                    alert("テキストファイルの読み込みに失敗しました。\nバイナリファイル等は開けません。");
+                    alert(t("textLoadFailed"));
                 }
             });
         }
@@ -5212,8 +5594,7 @@ json.dumps(result)
                     count++;
                 }
 
-                is_mounted = true;
-                mounted_dir_handle = null;
+                // 追加書き込みのみ。clear_vfs_root / is_mounted は触らない
                 refresh_vfs_explorer_view();
                 js_result_area_element.value = `Dropped & Uploaded ${count} files.`;
 
@@ -5286,8 +5667,7 @@ json.dumps(result)
                     count++;
                 }
 
-                is_mounted = true;
-                mounted_dir_handle = null;
+                // 追加書き込みのみ。clear_vfs_root / is_mounted は触らない
                 refresh_vfs_explorer_view();
                 js_result_area_element.value = `Dropped & Uploaded ${count} files.`;
 
@@ -5567,7 +5947,7 @@ json.dumps(result)
 
                 // 名前の衝突チェック（上書き確認、またはリネーム）
                 if (pyodide_js.FS.analyzePath(new_path).exists) {
-                    if (!confirm(`"${file_name}" already exists in destination.\nOverwrite?`)) {
+                    if (!confirm(t("overwriteConfirm", { name: file_name }))) {
                         return;
                     }
                     // 上書きの場合は先に削除が必要（renameは上書き動作が環境によるため安全策）
@@ -5586,7 +5966,7 @@ json.dumps(result)
 
             } catch (err) {
                 console.error("Move Error:", err);
-                alert(`Move Failed: ${err.message}`);
+                alert(t("moveFailed", { message: err.message }));
             }
         }
 
@@ -5803,7 +6183,7 @@ def apply_auto_install(sourceCode):
         if unknownModules:
             import js
             for mod in sorted(unknownModules):
-                isConfirmed = js.confirm(f"未登録の外部ライブラリ '{mod}' が検出されました。\\nPyPI から直接ダウンロードしてインストールを試みますか？")
+                isConfirmed = js.confirm(js.__uiT("micropipConfirm").replace("{mod}", mod))
                 if isConfirmed:
                     detectedPackages.add(mod)
 
@@ -5921,7 +6301,7 @@ if os.path.exists("${MOUNT_PATH}"):
                         js_result_area_element.value = "# HTML Preview Started #";
                     } else {
                         js_result_area_element.value = "JS execution is disabled. Use HTML Preview.";
-                        alert("セキュリティのため、HTMLファイルのプレビューは開発モードでのみ許可されています。");
+                        alert(t("htmlPreviewDevOnly"));
                     }
                     return; // Python実行処理には行かない
 
@@ -5930,7 +6310,7 @@ if os.path.exists("${MOUNT_PATH}"):
                         js_inject_script(code)  // JSコード挿入用関数_野心的だが危険な機能 // サンドボックス化でリスクを許容値に
                     } else {
                         js_result_area_element.value = "JS execution is disabled. Use HTML Preview.";
-                        alert("セキュリティのため、JSファイルの直接実行は開発モードでのみ許可されています。");
+                        alert(t("jsRunDevOnly"));
                     }
                     return;
 
@@ -6110,11 +6490,7 @@ sys.stderr = Web_Stdout()
                 setup_resizers();
                 setup_footer_resizer();
                 //document.querySelector("header").style.zIndex = "9999";
-                py_result_area_element.value =
-                    `################################################
-# ★ 各種ロード完了
-# → [▶] ボタンでコードを実行できます
-################################################`;
+                py_result_area_element.value = t("readyBanner");
                 js_post_message("script_complete", "host", "*", {}, []);
                 console.log("# IDE_frame_log : script_complete")
                 //-------------------------------------------------------- ### Refresh Button Logic ###
@@ -6199,6 +6575,239 @@ sys.stderr = Web_Stdout()
                 return url_params.get("dev") === "true" ? true : false
             })();
 
+            //-------------------------------------------------------- ### UI i18n (lang クエリ) ###
+            // UI 表示言語のみ。コメント・console は対象外。ホットスワップ UI なし。
+            const uiLang = (() => {
+                const urlParams = new URLSearchParams(window.location.search);
+                const raw = (urlParams.get("lang") || "").toLowerCase();
+                return (raw === "en") ? "en" : "ja";
+            })();
+
+            // ホスト document の lang 属性を同期
+            try {
+                document.documentElement.lang = uiLang;
+            } catch (e) { /* ignore */ }
+
+            const uiMessages = {
+                ja: {
+                    githubNotLoggedIn: "未ログイン",
+                    githubLoggedIn: "ログイン中: {name}",
+                    githubNotLoggedInHint: "未ログイン — Script_Explorer の GitHub ボタンから OAuth ログインしてください",
+                    githubRepoLabel: "リポジトリ",
+                    githubRepoPlaceholder: "— ログイン後に一覧を取得 —",
+                    githubBranchLabel: "ブランチ",
+                    githubCommitLabel: "コミットメッセージ (Push 時)",
+                    githubOpenExplorer: "Explorer で開く",
+                    githubPush: "Push",
+                    githubLogout: "Logout",
+                    githubClose: "Close",
+                    loaderInit: "Sandbox を初期化中…",
+                    aiChatTitle: "AI Chat (Gemini Nano)",
+                    nanoStatusIdle: "未起動",
+                    nanoStatusReady: "準備完了",
+                    nanoStatusStarting: "起動中",
+                    nanoResetTitle: "セッションリセット",
+                    nanoHint: "下のボタンから Gemini nano を起動し、チャット出来ます",
+                    nanoPlaceholder: "指令を入力... (Enterで送信)",
+                    nanoSend: "送信",
+                    nanoAbort: "中断",
+                    nanoStarting: "起動中",
+                    titleToggleSidebar: "サイドバー表示切替",
+                    titleToggleAi: "AI サイドバー表示切替",
+                    titleSave: "保存",
+                    titleStop: "停止",
+                    titleRun: "実行",
+                    titleSerialConnect: "シリアル接続",
+                    titleSerialCut: "シリアル切断",
+                    githubDisabled: "GitHub 機能は現在のホスティングでは無効です。",
+                    githubFetchingRepos: "リポジトリ一覧を取得中…",
+                    githubNoRepos: "（リポジトリがありません）",
+                    githubReposFetched: "リポジトリ {count} 件を取得しました。",
+                    githubWorkerPlaceholder: "GitHub OAuth Worker の URL がプレースホルダのままです。\nindex.html の GITHUB_OAUTH_WORKER_ORIGIN をデプロイ済み Worker オリジンに差し替えてください。\n手順: cloudflare_worker/README.md",
+                    popupBlocked: "ポップアップがブロックされました。ブラウザの設定で許可してください。",
+                    geminiPrompt: "Geminiへのプロンプトを入力してください:",
+                    geminiNotFound: "送信先(Gemini)が見つかりません。\n連携ウィンドウが開いているか確認してください。",
+                    tokenCopied: "コピーしました : {token}",
+                    serialConnected: "シリアル接続しました",
+                    serialDisconnected: "シリアル切断しました",
+                    nanoUserAborted: "⚠️ ユーザーによって生成が中断されました。",
+                    nanoGenError: "⚠️ エラーが発生しました。応答を生成できませんでした。",
+                    nanoLoopUserAborted: "⚠️ ユーザーによって自律ループが中断されました。",
+                    nanoLoopStartError: "⚠️ エラーが発生しました。タスクを開始できませんでした。",
+                    nanoLoopError: "⚠️ エラーが発生しました。ループを維持できませんでした。",
+                    nanoNotSupported: "お使いのブラウザ、またはデバイスでは Prompt API がサポートされていません。\nChrome v127以上、かつ必要なコンポーネントが有効であることを確認してください。",
+                    nanoUnavailable: "Gemini Nano モデルが現在利用できません（現在の状態: {availability}）。\nモデルプロセスがクラッシュしているか、ブラウザ側で一時的にブロックされています。\nブラウザを再起動するか、別のタブで開き直してください。",
+                    nanoDownloading: "Gemini Nanoモデルのダウンロードがバックグラウンドで開始されました。\nダウンロードには数分かかります。完了するまでしばらくお待ちいただいた後、再度送信をお試しください。",
+                    nanoFatalCrash: "【致命的なエラー】ブラウザ内部のAIモデルプロセスが短時間に何度もクラッシュしたため、Chromeのセキュリティ制限によりNanoの起動がロックされました。\n\nこれを解決するには、Chromeのウィンドウ（すべてのタブ）を一度完全に閉じて再起動するか、PCを再起動した後に再度お試しください。",
+                    nanoSessionFail: "セッション作成に失敗しました。\n理由: {message}\nchrome://components で Optimization Guide が「New」になっているか確認してください。",
+                    nanoResetConfirm: "セッションをリセットして、チャット履歴を消去しますか？",
+                    agentStopNano: "【エージェント停止】有効なJSONコマンドが3回連続で検出されなかったため、自律ループを自動停止しました。",
+                    agentStopBridge: "【エージェント停止】有効なJSONコマンドが3回連続で検出されなかったため、外部連携ループを自動停止しました。",
+                    userVerification: "ユーザー検証依頼:\n{message}",
+                    goalAchieved: "目的達成:\n{message}",
+                    agentNoCommand: "システム通知: 出力の中に json コマンドが発見できませんでした。正しい json フォーマットに修正してください。",
+                    agentMultiCommand: "システム通知: 複数のコマンド（JSON）が検出されました。一度に実行できるコマンドは一つだけです。順次実行するか、一つに絞ってください。",
+                    agentBadJson: "システム通知: 提示されたJSONの構文が不正です。理由: {message}。JSON内部でPythonのトリプルクォート(\"\"\")や生の改行は使用できません。文字列中の改行は必ず「\\n」にエスケープし、全体を1つのダブルクォーテーションで囲んでください。",
+                    agentForceStopMsg: "システム通知: 3回連続で有効なコマンドが検出されなかったため、安全のために自律ループを強制停止しました。",
+                    githubOAuthStateMismatch: "OAuth state が一致しません。再度ログインしてください。",
+                    githubOAuthFailed: "OAuth に失敗しました。",
+                    githubUserFetchFailed: "ユーザー情報の取得に失敗: {message}",
+                    githubLoggedOutLocal: "ログアウトしました（ローカル token 破棄済み）。 共有PCでは github.com からもログアウトしてください。",
+                    githubRevoking: "GitHub 認可（grant）を取り消し中…",
+                    githubLoggedOutRevoked: "ログアウトしました（grant 取り消し済み）。 共有PCでは github.com からもログアウトしてください。",
+                    githubLoggedOutRevokeFail: "ログアウトしました（ローカル token は破棄済み。 grant 取り消しは失敗: {detail}）。 必要なら github.com/settings/applications で手動 revoke してください。",
+                    githubSelectRepo: "リポジトリを選択してください。",
+                    githubFetchingTree: "ツリーを取得中: {full} @ {branch}",
+                    githubTreeShown: "Explorer に表示しました ({count} files)",
+                    githubTreeTruncated: " ※件数上限または API truncated",
+                    githubTreeFailed: "ツリー取得失敗: {message}",
+                    githubOpenFirst: "先にリポジトリを Open してください。",
+                    githubCollecting: "IDE から変更ファイルを収集中…",
+                    githubPushing: "Push 中… ({count} files)",
+                    githubPushOk: "Push 成功: {owner}/{repo}@{branch} commit {sha}",
+                    githubPushFail: "Push 失敗: {message}",
+                    githubNotLoggedInErr: "未ログインです。",
+                    githubNoRepoSelected: "リポジトリが選択されていません。",
+                    githubOpenViaModal: "リポジトリ Open はホストの GitHub モーダルから行ってください。",
+                    nanoStatusStartingDots: "🔄 起動中...",
+                    nanoStatusUnavailable: "❌ 利用不可",
+                    nanoStatusModelDl: "🔄 モデルDL中...",
+                    nanoStatusSession: "🔄 セッション作成中...",
+                    nanoStatusDlProgress: "🔄 DL中... {progress}%",
+                    nanoStatusReadyGreen: "🟢 準備完了",
+                    nanoStatusStartFail: "❌ 起動失敗",
+                },
+                en: {
+                    githubNotLoggedIn: "Not logged in",
+                    githubLoggedIn: "Signed in: {name}",
+                    githubNotLoggedInHint: "Not logged in — use the GitHub button in Script_Explorer to sign in with OAuth",
+                    githubRepoLabel: "Repository",
+                    githubRepoPlaceholder: "— Sign in to load repositories —",
+                    githubBranchLabel: "Branch",
+                    githubCommitLabel: "Commit message (for Push)",
+                    githubOpenExplorer: "Open in Explorer",
+                    githubPush: "Push",
+                    githubLogout: "Logout",
+                    githubClose: "Close",
+                    loaderInit: "Initializing Sandbox…",
+                    aiChatTitle: "AI Chat (Gemini Nano)",
+                    nanoStatusIdle: "Idle",
+                    nanoStatusReady: "Ready",
+                    nanoStatusStarting: "Starting",
+                    nanoResetTitle: "Reset session",
+                    nanoHint: "Launch Gemini Nano with the controls below and start chatting.",
+                    nanoPlaceholder: "Enter a command... (Enter to send)",
+                    nanoSend: "Send",
+                    nanoAbort: "Stop",
+                    nanoStarting: "Starting",
+                    titleToggleSidebar: "Toggle sidebar",
+                    titleToggleAi: "Toggle AI sidebar",
+                    titleSave: "Save",
+                    titleStop: "Stop",
+                    titleRun: "Run",
+                    titleSerialConnect: "Connect serial",
+                    titleSerialCut: "Disconnect serial",
+                    githubDisabled: "GitHub features are disabled on this host.",
+                    githubFetchingRepos: "Fetching repositories…",
+                    githubNoRepos: "(No repositories)",
+                    githubReposFetched: "Loaded {count} repositories.",
+                    githubWorkerPlaceholder: "GitHub OAuth Worker URL is still a placeholder.\nSet GITHUB_OAUTH_WORKER_ORIGIN in index.html to your deployed Worker origin.\nSee: cloudflare_worker/README.md",
+                    popupBlocked: "Popup was blocked. Please allow popups in your browser settings.",
+                    geminiPrompt: "Enter a prompt for Gemini:",
+                    geminiNotFound: "Gemini target not found.\nMake sure the linked window is open.",
+                    tokenCopied: "Copied: {token}",
+                    serialConnected: "Serial connected",
+                    serialDisconnected: "Serial disconnected",
+                    nanoUserAborted: "⚠️ Generation was aborted by the user.",
+                    nanoGenError: "⚠️ An error occurred. Could not generate a response.",
+                    nanoLoopUserAborted: "⚠️ The autonomous loop was aborted by the user.",
+                    nanoLoopStartError: "⚠️ An error occurred. Could not start the task.",
+                    nanoLoopError: "⚠️ An error occurred. Could not keep the loop running.",
+                    nanoNotSupported: "The Prompt API is not supported in this browser or device.\nUse Chrome v127+ with the required components enabled.",
+                    nanoUnavailable: "Gemini Nano is currently unavailable (status: {availability}).\nThe model process may have crashed or is temporarily blocked.\nRestart the browser or reopen in another tab.",
+                    nanoDownloading: "Gemini Nano model download has started in the background.\nIt may take several minutes. Please wait, then try sending again.",
+                    nanoFatalCrash: "[Fatal] The in-browser AI model process crashed repeatedly in a short time, so Chrome locked Nano startup for security.\n\nFully close all Chrome windows (all tabs) and restart, or reboot the PC, then try again.",
+                    nanoSessionFail: "Failed to create a session.\nReason: {message}\nCheck chrome://components that Optimization Guide is not stuck on \"New\".",
+                    nanoResetConfirm: "Reset the session and clear chat history?",
+                    agentStopNano: "[Agent stopped] No valid JSON command was detected 3 times in a row. The autonomous loop was stopped automatically.",
+                    agentStopBridge: "[Agent stopped] No valid JSON command was detected 3 times in a row. The external bridge loop was stopped automatically.",
+                    userVerification: "User verification requested:\n{message}",
+                    goalAchieved: "Goal achieved:\n{message}",
+                    agentNoCommand: "System: No JSON command was found in the output. Please fix it to a valid JSON format.",
+                    agentMultiCommand: "System: Multiple JSON commands were detected. Only one command can run at a time. Run them sequentially or pick one.",
+                    agentBadJson: "System: Invalid JSON syntax. Reason: {message}. Do not use Python triple quotes (\"\"\") or raw newlines inside JSON. Escape newlines as \\n and keep the value in one double-quoted string.",
+                    agentForceStopMsg: "System: No valid command was detected 3 times in a row. The autonomous loop was force-stopped for safety.",
+                    githubOAuthStateMismatch: "OAuth state mismatch. Please sign in again.",
+                    githubOAuthFailed: "OAuth failed.",
+                    githubUserFetchFailed: "Failed to fetch user info: {message}",
+                    githubLoggedOutLocal: "Signed out (local token cleared). On a shared PC, also sign out of github.com.",
+                    githubRevoking: "Revoking GitHub grant…",
+                    githubLoggedOutRevoked: "Signed out (grant revoked). On a shared PC, also sign out of github.com.",
+                    githubLoggedOutRevokeFail: "Signed out (local token cleared; grant revoke failed: {detail}). Revoke manually at github.com/settings/applications if needed.",
+                    githubSelectRepo: "Please select a repository.",
+                    githubFetchingTree: "Fetching tree: {full} @ {branch}",
+                    githubTreeShown: "Shown in Explorer ({count} files)",
+                    githubTreeTruncated: " (count limit or API truncated)",
+                    githubTreeFailed: "Failed to fetch tree: {message}",
+                    githubOpenFirst: "Open a repository first.",
+                    githubCollecting: "Collecting changed files from the IDE…",
+                    githubPushing: "Pushing… ({count} files)",
+                    githubPushOk: "Push OK: {owner}/{repo}@{branch} commit {sha}",
+                    githubPushFail: "Push failed: {message}",
+                    githubNotLoggedInErr: "Not signed in.",
+                    githubNoRepoSelected: "No repository selected.",
+                    githubOpenViaModal: "Open a repository from the host GitHub modal.",
+                    nanoStatusStartingDots: "🔄 Starting...",
+                    nanoStatusUnavailable: "❌ Unavailable",
+                    nanoStatusModelDl: "🔄 Downloading model...",
+                    nanoStatusSession: "🔄 Creating session...",
+                    nanoStatusDlProgress: "🔄 Downloading... {progress}%",
+                    nanoStatusReadyGreen: "🟢 Ready",
+                    nanoStatusStartFail: "❌ Failed to start",
+                }
+            };
+
+            function t(key, vars) {
+                const pack = uiMessages[uiLang] || uiMessages.ja;
+                let s = (pack && pack[key]) || (uiMessages.ja && uiMessages.ja[key]) || key;
+                if (vars && typeof vars === "object") {
+                    Object.keys(vars).forEach((k) => {
+                        s = s.split("{" + k + "}").join(String(vars[k]));
+                    });
+                }
+                return s;
+            }
+
+            function applyUiLanguage(root) {
+                const scope = root || document;
+                scope.querySelectorAll("[data-i18n]").forEach((el) => {
+                    const key = el.getAttribute("data-i18n");
+                    if (key) el.textContent = t(key);
+                });
+                scope.querySelectorAll("[data-i18n-title]").forEach((el) => {
+                    const key = el.getAttribute("data-i18n-title");
+                    if (key) el.setAttribute("title", t(key));
+                });
+                scope.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+                    const key = el.getAttribute("data-i18n-placeholder");
+                    if (key) el.setAttribute("placeholder", t(key));
+                });
+                // AI ヒント: 選択言語の一方のみ表示
+                scope.querySelectorAll("[data-i18n-hint]").forEach((el) => {
+                    const lang = el.getAttribute("data-i18n-hint");
+                    el.style.display = (lang === uiLang) ? "" : "none";
+                });
+            }
+
+            // 静的 UI へ即適用 + nano-lang-select 初期値を UI 言語に連動
+            applyUiLanguage(document);
+            const nanoLangSelectInit = document.getElementById("nano-lang-select");
+            if (nanoLangSelectInit) {
+                nanoLangSelectInit.value = uiLang; // ja | en
+            }
+            console.log("# host_frame_log : uiLang :", uiLang);
+
+
             const session_token = (() => { // ランダムなトークンを生成
                 const token_length = 32;
                 const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"; // RFC 3986 2.3. Unreserved Characters
@@ -6219,6 +6828,8 @@ sys.stderr = Web_Stdout()
 
             //-------------------------------------------------------- ### Gemini_Nano_Management
             let activeAgentSource = null; // 現在Pythonスクリプトを実行要請しているエージェント ("NANO" | "WEB_BRIDGE")
+            // VFS ツリー取得の返送先（script 実行と独立させ、取り違えを防ぐ）
+            let activeVfsTreeSource = null;
 
             let continuousErrorCount = 0; // 連続する非有効コマンドの回数をカウントする変数
 
@@ -6229,7 +6840,8 @@ sys.stderr = Web_Stdout()
                     "add_memory",
                     "memory_presentation",
                     "user_verification",
-                    "goal_achieved"
+                    "goal_achieved",
+                    "vfs_tree_request"
                 ];
 
                 if (validCommands.includes(cmd)) {
@@ -6251,7 +6863,7 @@ sys.stderr = Web_Stdout()
                 if (!text) {
                     return {
                         "cmd": "No_Command",
-                        "message": "システム通知: 出力の中に json コマンドが発見できませんでした。正しい json フォーマットに修正してください。"
+                        "message": t("agentNoCommand")
                     };
                 }
 
@@ -6259,7 +6871,7 @@ sys.stderr = Web_Stdout()
                 if (cmdMatches && cmdMatches.length > 1) {
                     return {
                         "cmd": "Multiple_commands",
-                        "message": "システム通知: 複数のコマンド（JSON）が検出されました。一度に実行できるコマンドは一つだけです。順次実行するか、一つに絞ってください。"
+                        "message": t("agentMultiCommand")
                     };
                 }
 
@@ -6283,14 +6895,14 @@ sys.stderr = Web_Stdout()
                         // パース失敗時、AIに構文を修正させるための専用ステータスを返却
                         return {
                             "cmd": "JSON_Parse_Error",
-                            "message": `システム通知: 提示されたJSONの構文が不正です。理由: ${e.message}。JSON内部でPythonのトリプルクォート(\"\"\")や生の改行は使用できません。文字列中の改行は必ず「\\n」にエスケープし、全体を1つのダブルクォーテーションで囲んでください。`
+                            "message": t("agentBadJson", { message: e.message })
                         };
                     }
                 }
 
                 return {
                     "cmd": "No_Command",
-                    "message": "システム通知: 出力の中に json コマンドが発見できませんでした。正しい json フォーマットに修正してください。"
+                    "message": t("agentNoCommand")
                 };
             }
 
@@ -6331,7 +6943,7 @@ sys.stderr = Web_Stdout()
 
                     case "user_verification":
                         if (commandData.message) {
-                            alert("ユーザー検証依頼:\n" + commandData.message);
+                            alert(t("userVerification", { message: commandData.message }));
                             const verifyPayload = { "cmd": "Notification_completed", "message": commandData.message };
                             sendResponseToAgent(verifyPayload, agentSource);
                         }
@@ -6339,11 +6951,35 @@ sys.stderr = Web_Stdout()
 
                     case "goal_achieved":
                         if (commandData.message) {
-                            alert("目的達成:\n" + commandData.message);
+                            alert(t("goalAchieved", { message: commandData.message }));
                             // タスク完了時はGeminiへの返信を行わず、ここで自律ループを終了させる
                             console.log(`[Agent Loop Stopped] 目的達成によりループを終了します。 Source: ${agentSource}`);
                         }
                         break;
+
+                    // VFS ディレクトリ構造取得（Python を書かずにツリーを取得）
+                    case "vfs_tree_request": {
+                        activeVfsTreeSource = agentSource;
+                        const ideFrame = document.getElementById("ide_container");
+                        if (ideFrame && ideFrame.contentWindow) {
+                            ideFrame.contentWindow.postMessage({
+                                "cmd": "agent_vfs_tree",
+                                "path": commandData.path,
+                                "maxDepth": commandData.maxDepth
+                            }, "*");
+                            console.log("# host_frame_log : agent_vfs_tree requested");
+                        } else {
+                            // IDE 未準備時は即エラーをエージェントへ返す
+                            const failPayload = {
+                                "cmd": "vfs_tree_result",
+                                "path": commandData.path || "/mnt/vfs_root",
+                                "error": "IDE frame is not ready"
+                            };
+                            sendResponseToAgent(failPayload, agentSource);
+                            activeVfsTreeSource = null;
+                        }
+                        break;
+                    }
 
                     case "Multiple_commands":
                     case "No_Command":
@@ -6445,15 +7081,34 @@ sys.stderr = Web_Stdout()
     "cmd": "goal_achieved",
     "message": "目的達成内容"
 }
+### <<Gemini>> から <<IDE>> への「VFSディレクトリ構造取得依頼」 json フォーマット
+{
+    "cmd": "vfs_tree_request",
+    "path": "/mnt/vfs_root",
+    "maxDepth": 8
+}
+- path / maxDepth は省略可（既定: path=/mnt/vfs_root, maxDepth=8）
+- VFS のファイル・フォルダ一覧を知るときは script_run_request で os.listdir 等を書かず、本コマンドを使うこと（コンテキスト汚染防止）
+- path は /mnt/vfs_root 配下のみ許可。ファイル内容は返さない（名前と構造のみ）
+### <<IDE>> から <<Gemini>> への「VFSディレクトリ構造結果」 json フォーマット
+{
+    "cmd": "vfs_tree_result",
+    "path": "/mnt/vfs_root",
+    "tree": "tree風テキスト",
+    "fileCount": 0,
+    "dirCount": 0,
+    "truncated": false
+}
+- 失敗時は error フィールドに理由が入る
 ### <<IDE>> から <<Gemini>> への「コマンド json 多数検出通知」 json フォーマット
 {
     "cmd": "Multiple_commands",
-    "message": "システム通知: 複数のコマンド（JSON）が検出されました。一度に実行できるコマンドは一つだけです。順次実行するか、一つに絞ってください。"
+    "message": "${t("agentMultiCommand")}"
 }
 ### <<IDE>> から <<Gemini>> への「規定フォーマットjson未検出通知」フォーマット
 {
     "cmd": "No_Command",
-    "message": "システム通知: 出力の中に json コマンドが発見できませんでした。正しい json フォーマットに修正してください。"
+    "message": "${t("agentNoCommand")}"
 }
 #IDEウェブアプリ解説
 ##コンセプト
@@ -6908,8 +7563,8 @@ sys.stderr = Web_Stdout()
                 const loggedIn = !!githubAccessToken;
                 if (githubModalUserRow) {
                     githubModalUserRow.textContent = loggedIn
-                        ? ("ログイン中: " + (githubUserLogin || "(unknown)"))
-                        : "未ログイン — Script_Explorer の GitHub ボタンから OAuth ログインしてください";
+                        ? t("githubLoggedIn", { name: (githubUserLogin || "(unknown)") })
+                        : t("githubNotLoggedInHint");
                 }
                 if (githubRepoSelect) githubRepoSelect.disabled = !loggedIn;
                 if (githubBranchInput) githubBranchInput.disabled = !loggedIn;
@@ -6926,7 +7581,7 @@ sys.stderr = Web_Stdout()
              */
             async function handleGithubConnectRequest() {
                 if (!githubFeatureEnabled) {
-                    postToIdeGithub({ cmd: "github_error", message: "GitHub 機能は現在のホスティングでは無効です。" });
+                    postToIdeGithub({ cmd: "github_error", message: t("githubDisabled") });
                     return;
                 }
                 if (!githubAccessToken) {
@@ -6943,14 +7598,14 @@ sys.stderr = Web_Stdout()
 
             async function populateRepoSelect() {
                 if (!githubAccessToken) return;
-                setGithubModalStatus("リポジトリ一覧を取得中…");
+                setGithubModalStatus(t("githubFetchingRepos"));
                 const repos = await githubFetchRepos();
                 if (!githubRepoSelect) return;
                 githubRepoSelect.innerHTML = "";
                 if (repos.length === 0) {
                     const opt = document.createElement("option");
                     opt.value = "";
-                    opt.textContent = "（リポジトリがありません）";
+                    opt.textContent = t("githubNoRepos");
                     githubRepoSelect.appendChild(opt);
                 } else {
                     for (let i = 0; i < repos.length; i++) {
@@ -6967,17 +7622,13 @@ sys.stderr = Web_Stdout()
                         githubBranchInput.value = first.dataset.defaultBranch || "main";
                     }
                 }
-                setGithubModalStatus("リポジトリ " + repos.length + " 件を取得しました。");
+                setGithubModalStatus(t("githubReposFetched", { count: repos.length }));
             }
 
             async function startGithubOAuthLogin() {
                 if (!githubFeatureEnabled) return;
                 if (GITHUB_OAUTH_WORKER_ORIGIN.indexOf("YOUR_WORKER_SUBDOMAIN") !== -1) {
-                    alert(
-                        "GitHub OAuth Worker の URL がプレースホルダのままです。\n"
-                        + "index.html の GITHUB_OAUTH_WORKER_ORIGIN をデプロイ済み Worker オリジンに差し替えてください。\n"
-                        + "手順: cloudflare_worker/README.md"
-                    );
+                    alert(t("githubWorkerPlaceholder"));
                     return;
                 }
 
@@ -7001,7 +7652,7 @@ sys.stderr = Web_Stdout()
                     "width=600,height=720,menubar=no,toolbar=no"
                 );
                 if (!githubOAuthPopup) {
-                    alert("ポップアップがブロックされました。ブラウザの設定で許可してください。");
+                    alert(t("popupBlocked"));
                     githubOAuthState = null;
                     githubOAuthCodeVerifier = null;
                 }
@@ -7024,7 +7675,7 @@ sys.stderr = Web_Stdout()
                 // 3) state 一致
                 if (!githubOAuthState || data.state !== githubOAuthState) {
                     console.warn("GitHub OAuth: state mismatch");
-                    setGithubModalStatus("OAuth state が一致しません。再度ログインしてください。");
+                    setGithubModalStatus(t("githubOAuthStateMismatch"));
                     return true;
                 }
 
@@ -7037,7 +7688,7 @@ sys.stderr = Web_Stdout()
 
                 if (!data.ok || !data.access_token) {
                     // Worker から error 文字列が来る場合は表示（token は含まれない）
-                    const errMsg = (data && data.error) ? String(data.error) : "OAuth に失敗しました。";
+                    const errMsg = (data && data.error) ? String(data.error) : t("githubOAuthFailed");
                     setGithubModalStatus(errMsg);
                     return true;
                 }
@@ -7056,7 +7707,7 @@ sys.stderr = Web_Stdout()
                         await populateRepoSelect();
                     } catch (err) {
                         console.error(err);
-                        setGithubModalStatus("ユーザー情報の取得に失敗: " + err.message);
+                        setGithubModalStatus(t("githubUserFetchFailed", { message: err.message }));
                     }
                 })();
                 return true;
@@ -7078,7 +7729,11 @@ sys.stderr = Web_Stdout()
                 githubOAuthState = null;
                 githubOAuthCodeVerifier = null;
                 if (githubRepoSelect) {
-                    githubRepoSelect.innerHTML = '<option value="">— ログイン後に一覧を取得 —</option>';
+                    githubRepoSelect.innerHTML = "";
+                    const phOpt = document.createElement("option");
+                    phOpt.value = "";
+                    phOpt.textContent = t("githubRepoPlaceholder");
+                    githubRepoSelect.appendChild(phOpt);
                 }
                 if (githubBranchInput) githubBranchInput.value = "";
                 if (githubCommitMessage) githubCommitMessage.value = "";
@@ -7087,14 +7742,11 @@ sys.stderr = Web_Stdout()
 
                 // Worker 未設定時はメモリ破棄のみ
                 if (!tokenToRevoke || GITHUB_OAUTH_WORKER_ORIGIN.indexOf("YOUR_WORKER_SUBDOMAIN") !== -1) {
-                    setGithubModalStatus(
-                        "ログアウトしました（ローカル token 破棄済み）。"
-                        + " 共有PCでは github.com からもログアウトしてください。"
-                    );
+                    setGithubModalStatus(t("githubLoggedOutLocal"));
                     return;
                 }
 
-                setGithubModalStatus("GitHub 認可（grant）を取り消し中…");
+                setGithubModalStatus(t("githubRevoking"));
                 let revokeOk = false;
                 let revokeDetail = "";
                 try {
@@ -7125,16 +7777,9 @@ sys.stderr = Web_Stdout()
 
                 // token 文字列はログ・UI に出さない
                 if (revokeOk) {
-                    setGithubModalStatus(
-                        "ログアウトしました（grant 取り消し済み）。"
-                        + " 共有PCでは github.com からもログアウトしてください。"
-                    );
+                    setGithubModalStatus(t("githubLoggedOutRevoked"));
                 } else {
-                    setGithubModalStatus(
-                        "ログアウトしました（ローカル token は破棄済み。"
-                        + " grant 取り消しは失敗: " + (revokeDetail || "unknown") + "）。"
-                        + " 必要なら github.com/settings/applications で手動 revoke してください。"
-                    );
+                    setGithubModalStatus(t("githubLoggedOutRevokeFail", { detail: (revokeDetail || "unknown") }));
                 }
             }
 
@@ -7142,7 +7787,7 @@ sys.stderr = Web_Stdout()
                 if (!githubAccessToken) return;
                 const full = githubRepoSelect && githubRepoSelect.value;
                 if (!full || full.indexOf("/") === -1) {
-                    setGithubModalStatus("リポジトリを選択してください。");
+                    setGithubModalStatus(t("githubSelectRepo"));
                     return;
                 }
                 const parts = full.split("/");
@@ -7152,7 +7797,7 @@ sys.stderr = Web_Stdout()
                     || (githubRepoSelect.selectedOptions[0] && githubRepoSelect.selectedOptions[0].dataset.defaultBranch)
                     || "main";
 
-                setGithubModalStatus("ツリーを取得中: " + full + " @ " + branch);
+                setGithubModalStatus(t("githubFetchingTree", { full: full, branch: branch }));
                 try {
                     const result = await githubFetchRepoTree(owner, repo, branch);
                     githubCurrentRepo = { owner, repo, branch, defaultBranch: branch };
@@ -7164,24 +7809,24 @@ sys.stderr = Web_Stdout()
                         branch,
                         tree: result.tree
                     });
-                    let status = "Explorer に表示しました (" + result.fileCount + " files)";
-                    if (result.truncated) status += " ※件数上限または API truncated";
+                    let status = t("githubTreeShown", { count: result.fileCount });
+                    if (result.truncated) status += t("githubTreeTruncated");
                     setGithubModalStatus(status);
                 } catch (err) {
                     console.error(err);
-                    setGithubModalStatus("ツリー取得失敗: " + err.message);
+                    setGithubModalStatus(t("githubTreeFailed", { message: err.message }));
                     postToIdeGithub({ cmd: "github_error", message: err.message });
                 }
             }
 
             function requestPushFromIde() {
                 if (!githubAccessToken || !githubCurrentRepo) {
-                    setGithubModalStatus("先にリポジトリを Open してください。");
+                    setGithubModalStatus(t("githubOpenFirst"));
                     return;
                 }
                 const msg = (githubCommitMessage && githubCommitMessage.value.trim())
                     || "Update from Pyodide IDE";
-                setGithubModalStatus("IDE から変更ファイルを収集中…");
+                setGithubModalStatus(t("githubCollecting"));
                 postToIdeGithub({
                     cmd: "github_collect_for_push",
                     commitMessage: msg,
@@ -7191,16 +7836,17 @@ sys.stderr = Web_Stdout()
 
             async function handleGithubPushRequest(obj) {
                 try {
-                    if (!githubAccessToken) throw new Error("未ログインです。");
+                    if (!githubAccessToken) throw new Error(t("githubNotLoggedInErr"));
                     const owner = (obj && obj.owner) || (githubCurrentRepo && githubCurrentRepo.owner);
                     const repo = (obj && obj.repo) || (githubCurrentRepo && githubCurrentRepo.repo);
                     const branch = (obj && obj.branch) || (githubCurrentRepo && githubCurrentRepo.branch) || "main";
                     const message = (obj && obj.message) || "Update from Pyodide IDE";
                     const files = (obj && obj.files) || [];
-                    setGithubModalStatus("Push 中… (" + files.length + " files)");
+                    setGithubModalStatus(t("githubPushing", { count: files.length }));
                     const result = await githubPushFiles(owner, repo, branch, message, files);
-                    const okMsg = "Push 成功: " + owner + "/" + repo + "@" + branch
-                        + " commit " + result.commitSha.substring(0, 7);
+                    const okMsg = t("githubPushOk", {
+                        owner: owner, repo: repo, branch: branch, sha: result.commitSha.substring(0, 7)
+                    });
                     setGithubModalStatus(okMsg);
                     postToIdeGithub({
                         cmd: "github_push_result",
@@ -7210,7 +7856,7 @@ sys.stderr = Web_Stdout()
                     });
                 } catch (err) {
                     console.error(err);
-                    setGithubModalStatus("Push 失敗: " + err.message);
+                    setGithubModalStatus(t("githubPushFail", { message: err.message }));
                     postToIdeGithub({
                         cmd: "github_push_result",
                         ok: false,
@@ -7221,7 +7867,7 @@ sys.stderr = Web_Stdout()
 
             async function handleGithubFileRequest(path) {
                 try {
-                    if (!githubCurrentRepo) throw new Error("リポジトリが選択されていません。");
+                    if (!githubCurrentRepo) throw new Error(t("githubNoRepoSelected"));
                     const { owner, repo, branch } = githubCurrentRepo;
                     const file = await githubFetchFileContent(owner, repo, path, branch);
                     postToIdeGithub({
@@ -7331,6 +7977,8 @@ sys.stderr = Web_Stdout()
 		console.log("# IDE_frame_log : top_level_flag :", top_level_flag, typeof top_level_flag);
 		const githubFeatureEnabled = ${JSON.stringify(githubFeatureEnabled)};
 		console.log("# IDE_frame_log : githubFeatureEnabled :", githubFeatureEnabled, typeof githubFeatureEnabled);
+		const uiLang = ${JSON.stringify(uiLang)};
+		console.log("# IDE_frame_log : uiLang :", uiLang, typeof uiLang);
 	<\/script>
   `;
 
@@ -7376,7 +8024,7 @@ sys.stderr = Web_Stdout()
             //-------------------------------------------------------- ### send_prompt_button_event_listener ###
             send_prompt_button.addEventListener("click", () => { // [◆]
                 // 1. ユーザー入力用ダイアログを表示
-                const user_input = window.prompt("Geminiへのプロンプトを入力してください:", "");
+                const user_input = window.prompt(t("geminiPrompt"), "");
 
                 // キャンセルまたは空入力の場合は何もしない
                 if (user_input === null || user_input.trim() === "") {
@@ -7411,14 +8059,14 @@ sys.stderr = Web_Stdout()
                 if (sent) {
                     console.log("# host_frame_log : Prompt sent to Gemini.", payload);
                 } else {
-                    alert("送信先(Gemini)が見つかりません。\n連携ウィンドウが開いているか確認してください。");
+                    alert(t("geminiNotFound"));
                 }
             });
 
             //-------------------------------------------------------- ### copy_token_button_event_listener ###
             copy_token_button.addEventListener("click", () => {
                 navigator.clipboard.writeText(session_token).then(() => { // クリップボードに書き込み
-                    alert("コピーしました : " + session_token); // 成功時の処理
+                    alert(t("tokenCopied", { token: session_token })); // 成功時の処理
                 }).catch(err => {
                     console.error("コピーに失敗しました", err); // 失敗時の処理
                 });
@@ -7441,7 +8089,7 @@ sys.stderr = Web_Stdout()
                     status: "connected",
                     msg: "Serial Port Connected"
                 }, "*");
-                alert("Serial Connected");
+                alert(t("serialConnected"));
                 // disabled属性を削除
                 document.getElementById("send_modbus_btn_id").removeAttribute("disabled");
                 document.getElementById("send_modbus_btn_id").style.opacity = "0.5";
@@ -7454,7 +8102,7 @@ sys.stderr = Web_Stdout()
                     status: "disconnected",
                     msg: "Serial Port Disconnected"
                 }, "*");
-                alert("Serial Disconnected");
+                alert(t("serialDisconnected"));
                 document.getElementById("send_modbus_btn_id").removeAttribute("disabled");
                 document.getElementById("send_modbus_btn_id").style.opacity = "1.0";
             });
@@ -7632,7 +8280,7 @@ sys.stderr = Web_Stdout()
                     if (this.userInput) this.userInput.disabled = false;
                     if (this.sendBtn) {
                         this.sendBtn.disabled = false;
-                        this.sendBtn.textContent = "送信";
+                        this.sendBtn.textContent = t("nanoSend");
                         this.sendBtn.style.backgroundColor = "#3d9cf0";
                     }
                 }
@@ -7708,7 +8356,7 @@ sys.stderr = Web_Stdout()
                     this.abortController = controller;
 
                     this.userInput.disabled = true;
-                    this.sendBtn.textContent = "中断";
+                    this.sendBtn.textContent = t("nanoAbort");
                     this.sendBtn.style.backgroundColor = "#e06c75"; // 警告カラー（赤）に変更
                     this.sendBtn.disabled = false;
 
@@ -7744,10 +8392,10 @@ sys.stderr = Web_Stdout()
                         console.error("Gemini Nano Stream Error:", error);
                         // 中断起因のエラーか、通常のシステムエラーかを判定
                         if (error.name === "AbortError") {
-                            aiMsgDiv.textContent = "⚠️ ユーザーによって生成が中断されました。";
+                            aiMsgDiv.textContent = t("nanoUserAborted");
                             aiMsgDiv.style.color = "orange";
                         } else {
-                            aiMsgDiv.textContent = "⚠️ エラーが発生しました。応答を生成できませんでした。";
+                            aiMsgDiv.textContent = t("nanoGenError");
                             aiMsgDiv.style.color = "red";
                         }
                     } finally {
@@ -7757,7 +8405,7 @@ sys.stderr = Web_Stdout()
                             this.abortController = null;
 
                             this.userInput.disabled = false;
-                            this.sendBtn.textContent = "送信";
+                            this.sendBtn.textContent = t("nanoSend");
                             this.sendBtn.style.backgroundColor = "#3d9cf0"; // 元のテーマカラー（青）に戻す
                             this.sendBtn.disabled = false;
                             this.userInput.focus();
@@ -7774,7 +8422,7 @@ sys.stderr = Web_Stdout()
                     this.abortController = controller;
 
                     this.userInput.disabled = true;
-                    this.sendBtn.textContent = "中断";
+                    this.sendBtn.textContent = t("nanoAbort");
                     this.sendBtn.style.backgroundColor = "#e06c75"; // 警告カラー（赤）
                     this.sendBtn.disabled = false;
 
@@ -7799,10 +8447,10 @@ sys.stderr = Web_Stdout()
                     } catch (error) {
                         console.error("Gemini Nano First Stream Error:", error);
                         if (error.name === "AbortError") {
-                            aiMsgDiv.textContent = "⚠️ ユーザーによって自律ループが中断されました。";
+                            aiMsgDiv.textContent = t("nanoLoopUserAborted");
                             aiMsgDiv.style.color = "orange";
                         } else {
-                            aiMsgDiv.textContent = "⚠️ エラーが発生しました。タスクを開始できませんでした。";
+                            aiMsgDiv.textContent = t("nanoLoopStartError");
                             aiMsgDiv.style.color = "red";
                         }
                     } finally {
@@ -7811,7 +8459,7 @@ sys.stderr = Web_Stdout()
                             this.abortController = null;
 
                             this.userInput.disabled = false;
-                            this.sendBtn.textContent = "送信";
+                            this.sendBtn.textContent = t("nanoSend");
                             this.sendBtn.style.backgroundColor = "#3d9cf0";
                             this.sendBtn.disabled = false;
                             this.userInput.focus();
@@ -7927,15 +8575,34 @@ sys.stderr = Web_Stdout()
     "cmd": "goal_achieved",
     "message": "目的達成内容"
 }
+### <<Gemini>> から <<IDE>> への「VFSディレクトリ構造取得依頼」 json フォーマット
+{
+    "cmd": "vfs_tree_request",
+    "path": "/mnt/vfs_root",
+    "maxDepth": 8
+}
+- path / maxDepth は省略可（既定: path=/mnt/vfs_root, maxDepth=8）
+- VFS のファイル・フォルダ一覧を知るときは script_run_request で os.listdir 等を書かず、本コマンドを使うこと（コンテキスト汚染防止）
+- path は /mnt/vfs_root 配下のみ許可。ファイル内容は返さない（名前と構造のみ）
+### <<IDE>> から <<Gemini>> への「VFSディレクトリ構造結果」 json フォーマット
+{
+    "cmd": "vfs_tree_result",
+    "path": "/mnt/vfs_root",
+    "tree": "tree風テキスト",
+    "fileCount": 0,
+    "dirCount": 0,
+    "truncated": false
+}
+- 失敗時は error フィールドに理由が入る
 ### <<IDE>> から <<Gemini>> への「コマンド json 多数検出通知」 json フォーマット
 {
     "cmd": "Multiple_commands",
-    "message": "システム通知: 複数のコマンド（JSON）が検出されました。一度に実行できるコマンドは一つだけです。順次実行するか、一つに絞ってください。"
+    "message": "${t("agentMultiCommand")}"
 }
 ### <<IDE>> から <<Gemini>> への「規定フォーマットjson未検出通知」フォーマット
 {
     "cmd": "No_Command",
-    "message": "システム通知: 出力の中に json コマンドが発見できませんでした。正しい json フォーマットに修正してください。"
+    "message": "${t("agentNoCommand")}"
 }`;
                     }
 
@@ -7943,8 +8610,8 @@ sys.stderr = Web_Stdout()
                     this.isGenerating = true;
                     this.userInput.disabled = true;
                     this.sendBtn.disabled = true;
-                    this.sendBtn.textContent = "起動中";
-                    this.updateStatus("🔄 起動中...", "orange");
+                    this.sendBtn.textContent = t("nanoStarting");
+                    this.updateStatus(t("nanoStatusStartingDots"), "orange");
 
                     // 各種 Prompt API のファクトリチェック
                     const aiAPI = window.LanguageModel ||
@@ -7955,8 +8622,8 @@ sys.stderr = Web_Stdout()
                     const summarizerAPI = window.Summarizer || (window.ai && window.ai.summarizer);
 
                     if (!aiAPI) {
-                        this.updateStatus("❌ 利用不可", "red");
-                        alert("お使いのブラウザ、またはデバイスでは Prompt API がサポートされていません。\nChrome v127以上、かつ必要なコンポーネントが有効であることを確認してください。");
+                        this.updateStatus(t("nanoStatusUnavailable"), "red");
+                        alert(t("nanoNotSupported"));
                         this.resetUiToReady();
                         return false;
                     }
@@ -7975,18 +8642,18 @@ sys.stderr = Web_Stdout()
                         
                         // 利用可能状態を表す文字列（"readily" または "available"）と、DL中（"after-download"）のいずれにも該当しない場合のみガードをかける
                         if (availability !== "readily" && availability !== "available" && availability !== "after-download") {
-                            this.updateStatus("❌ 利用不可", "red");
-                            alert(`Gemini Nano モデルが現在利用できません（現在の状態: ${availability}）。\nモデルプロセスがクラッシュしているか、ブラウザ側で一時的にブロックされています。\nブラウザを再起動するか、別のタブで開き直してください。`);
+                            this.updateStatus(t("nanoStatusUnavailable"), "red");
+                            alert(t("nanoUnavailable", { availability: availability }));
                             this.resetUiToReady();
                             return false;
                         } else if (availability === "after-download") {
                             // モデルがまだデバイスにダウンロードされていない場合の処理
-                            this.updateStatus("🔄 モデルDL中...", "orange");
-                            alert("Gemini Nanoモデルのダウンロードがバックグラウンドで開始されました。\nダウンロードには数分かかります。完了するまでしばらくお待ちいただいた後、再度送信をお試しください。");
+                            this.updateStatus(t("nanoStatusModelDl"), "orange");
+                            alert(t("nanoDownloading"));
                             this.resetUiToReady();
                             return false; // ダウンロード未完了のため、安全に処理をここでブロックして中断する
                         } else {
-                            this.updateStatus("🔄 セッション作成中...", "orange");
+                            this.updateStatus(t("nanoStatusSession"), "orange");
                         }
 
                         // 重複指定や未知のプロパティ（outputLanguage等）による内部パニック（InvalidStateError）を完全に防ぐため、
@@ -8005,7 +8672,7 @@ sys.stderr = Web_Stdout()
                                     m.addEventListener("downloadprogress", (e) => {
                                         if (e.total > 0 && e.loaded > 0) {
                                             const progress = Math.round((e.loaded / e.total) * 100);
-                                            this.updateStatus(`🔄 DL中... ${progress}%`, "orange");
+                                            this.updateStatus(t("nanoStatusDlProgress", { progress: progress }), "orange");
                                         }
                                     });
                                 }
@@ -8046,7 +8713,7 @@ sys.stderr = Web_Stdout()
                             console.warn("[Summarizer Init] Summarizer API is not defined in this browser.");
                         }
 
-                        this.updateStatus("🟢 準備完了", "green");
+                        this.updateStatus(t("nanoStatusReadyGreen"), "green");
                         if (this.langSelect) {
                             this.langSelect.disabled = true; // セッション作成後は言語変更を無効化
                         }
@@ -8056,13 +8723,13 @@ sys.stderr = Web_Stdout()
 
                     } catch (error) {
                         console.error("Gemini Nano Init Error:", error);
-                        this.updateStatus("❌ 起動失敗", "red");
+                        this.updateStatus(t("nanoStatusStartFail"), "red");
                         const errMessage = String(error);
                         // ブラウザ側のAIプロセス強制ロック（クラッシュ超過）を固有エラーとして綺麗に捕捉
                         if (errMessage.includes("crashed too many times")) {
-                            alert("【致命的なエラー】ブラウザ内部のAIモデルプロセスが短時間に何度もクラッシュしたため、Chromeのセキュリティ制限によりNanoの起動がロックされました。\n\nこれを解決するには、Chromeのウィンドウ（すべてのタブ）を一度完全に閉じて再起動するか、PCを再起動した後に再度お試しください。");
+                            alert(t("nanoFatalCrash"));
                         } else {
-                            alert(`セッション作成に失敗しました。\n理由: ${error.message}\nchrome://components で Optimization Guide が「New」になっているか確認してください。`);
+                            alert(t("nanoSessionFail", { message: error.message }));
                         }
                         this.resetUiToReady();
                         return false; // 初期化失敗信号を返却
@@ -8071,7 +8738,7 @@ sys.stderr = Web_Stdout()
 
                 // セッションおよびチャット表示のリセット処理
                 async resetSession() {
-                    const confirmReset = confirm("セッションをリセットして、チャット履歴を消去しますか？");
+                    const confirmReset = confirm(t("nanoResetConfirm"));
                     if (!confirmReset) return;
 
                     // 既存のAIセッションが構築されていれば明示的に破棄
@@ -8105,18 +8772,16 @@ sys.stderr = Web_Stdout()
 
                     // チャットコンテナを初期状態（案内メッセージのみ）にクリア
                     if (this.chatContainer) {
-                        this.chatContainer.innerHTML = `
-                            <div class="nano-msg nano-msg-hint">
-                                You can launch Gemini nano and chat using the button below.
-                            </div>
-                            <div class="nano-msg nano-msg-hint">
-                                下のボタンから Gemini nano を起動し、チャット出来ます
-                            </div>
-                        `;
+                        // 選択中 UI 言語のヒントのみ再配置
+                        this.chatContainer.innerHTML = "";
+                        const hint = document.createElement("div");
+                        hint.className = "nano-msg nano-msg-hint";
+                        hint.textContent = t("nanoHint");
+                        this.chatContainer.appendChild(hint);
                     }
 
                     // 各種UI要素の状態を初期（未起動時）の状態へ巻き戻す
-                    this.updateStatus("未起動", "#aaa");
+                    this.updateStatus(t("nanoStatusIdle"), "#aaa");
                     if (this.langSelect) {
                         this.langSelect.disabled = false; // リセット時は再度選択可能にする
                     }
@@ -8129,7 +8794,7 @@ sys.stderr = Web_Stdout()
                     }
                     if (this.sendBtn) {
                         this.sendBtn.disabled = false; // 送信ボタンを有効化して初回起動を待てる状態にする
-                        this.sendBtn.textContent = "送信";
+                        this.sendBtn.textContent = t("nanoSend");
                         this.sendBtn.style.backgroundColor = "#3d9cf0";
                     }
 
@@ -8259,7 +8924,7 @@ ${newRawLog}`;
 
                     // 連続エラーカウントをチェック
                     if (trackAgentResponseStatus(commandData.cmd)) {
-                        alert("【エージェント停止】有効なJSONコマンドが3回連続で検出されなかったため、自律ループを自動停止しました。");
+                        alert(t("agentStopNano"));
                         this.appendMessage("🛑 3回連続でコマンド非検出、または構文エラーが続いたため、自律ループを強制停止しました。指示内容を見直してください。", "system");
                         return; // ここで処理を遮断し、自動フィードバックループを止めます
                     }
@@ -8296,7 +8961,7 @@ ${newRawLog}`;
                     this.abortController = controller;
 
                     this.userInput.disabled = true;
-                    this.sendBtn.textContent = "中断";
+                    this.sendBtn.textContent = t("nanoAbort");
                     this.sendBtn.style.backgroundColor = "#e06c75"; // 警告カラー（赤）に変更
                     this.sendBtn.disabled = false;
 
@@ -8319,10 +8984,10 @@ ${newRawLog}`;
                         console.error("Gemini Nano Loop Stream Error:", error);
                         // 中断起因の例外（AbortError）かどうかを判定してメッセージを出し分ける
                         if (error.name === "AbortError") {
-                            aiMsgDiv.textContent = "⚠️ ユーザーによって自律ループが中断されました。";
+                            aiMsgDiv.textContent = t("nanoLoopUserAborted");
                             aiMsgDiv.style.color = "orange";
                         } else {
-                            aiMsgDiv.textContent = "⚠️ エラーが発生しました。ループを維持できませんでした。";
+                            aiMsgDiv.textContent = t("nanoLoopError");
                             aiMsgDiv.style.color = "red";
                         }
                     } finally {
@@ -8332,7 +8997,7 @@ ${newRawLog}`;
                             this.abortController = null;
 
                             this.userInput.disabled = false;
-                            this.sendBtn.textContent = "送信";
+                            this.sendBtn.textContent = t("nanoSend");
                             this.sendBtn.style.backgroundColor = "#3d9cf0"; // 元のテーマカラー（青）に戻す
                             this.sendBtn.disabled = false;
                         }
@@ -8931,12 +9596,12 @@ ${newRawLog}`;
                 // ブックマークレット連携（外部LLM）からの応答の場合のみ連続エラーを判定
                 if (event.source === window.opener && is_allowed_origin) {
                     if (trackAgentResponseStatus(data.cmd)) {
-                        alert("【エージェント停止】有効なJSONコマンドが3回連続で検出されなかったため、外部連携ループを自動停止しました。");
+                        alert(t("agentStopBridge"));
 
                         // 呼び出し元のGemini側にも停止メッセージを投げて無限フィードバックを防ぐ
                         const stopPayload = {
                             "cmd": "Agent_Stopped",
-                            "message": "システム通知: 3回連続で有効なコマンドが検出されなかったため、安全のために自律ループを強制停止しました。"
+                            "message": t("agentForceStopMsg")
                         };
                         if (window.opener && !window.opener.closed) {
                             window.opener.postMessage(stopPayload, "*");
@@ -8970,6 +9635,33 @@ ${newRawLog}`;
                         } else {
                             console.warn("# host_frame_log : activeAgentSource is null. Cannot send script_result.");
                         }
+                    }
+                    return;
+                }
+
+                //-------------------------------------------------------- ### VFS ツリー取得結果（Agent 向け）
+                if (data && data.cmd === "vfs_tree_result") {
+                    const obj = data.obj || {};
+                    const responsePayload = {
+                        "cmd": "vfs_tree_result",
+                        "path": obj.path,
+                        "tree": obj.tree,
+                        "fileCount": obj.fileCount,
+                        "dirCount": obj.dirCount,
+                        "truncated": obj.truncated,
+                        "maxDepth": obj.maxDepth
+                    };
+                    // エラー時のみ error を付与（成功レスポンスを汚さない）
+                    if (obj.error) {
+                        responsePayload.error = obj.error;
+                    }
+
+                    if (activeVfsTreeSource) {
+                        sendResponseToAgent(responsePayload, activeVfsTreeSource);
+                        console.log(`# host_frame_log : Sent_vfs_tree_result to ${activeVfsTreeSource}`);
+                        activeVfsTreeSource = null;
+                    } else {
+                        console.warn("# host_frame_log : activeVfsTreeSource is null. Cannot send vfs_tree_result.");
                     }
                     return;
                 }
@@ -9010,7 +9702,7 @@ ${newRawLog}`;
                         return;
                     }
                     if (!githubFeatureEnabled) {
-                        postToIdeGithub({ cmd: "github_error", message: "GitHub 機能は現在のホスティングでは無効です。" });
+                        postToIdeGithub({ cmd: "github_error", message: t("githubDisabled") });
                         return;
                     }
                     const gObj = data.obj || {};
@@ -9026,7 +9718,7 @@ ${newRawLog}`;
                             await handleGithubRefreshTree();
                         } else if (data.cmd === "github_open_repo_request") {
                             // 将来 IDE 側 UI 用。現状はホストモーダルで Open
-                            setGithubModalStatus("リポジトリ Open はホストの GitHub モーダルから行ってください。");
+                            setGithubModalStatus(t("githubOpenViaModal"));
                         } else {
                             console.warn("Unknown github cmd:", data.cmd);
                         }
