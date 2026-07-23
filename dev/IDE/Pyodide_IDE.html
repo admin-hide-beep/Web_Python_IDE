@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pyodide_IDE(v1.12.034)</title>
+    <title>Pyodide_IDE(v1.12.035)</title>
     <link rel="icon" type="image/png" href="favicon.png">
 
     <meta http-equiv="Content-Security-Policy" content="
@@ -1789,6 +1789,9 @@
                 scriptStateCleared: "Script_Explorer の保存データをクリアしました。",
                 scriptStateRestored: "Script_Explorer を LocalStorage から復元しました。",
                 scriptStateSaveFailed: "Script_Explorer の保存に失敗しました（容量超過の可能性）: {message}",
+                scriptExplorerSaved: "Script_Explorer に保存しました: {path}",
+                scriptExplorerSaveAmbiguous: "同名ファイルが複数あるため保存できません。Script_Explorer から開き直してください: {name}",
+                scriptExplorerSaveUnavailable: "現在の Script_Explorer（{type}）には Ctrl+S で保存できません。",
                 titleVfsUpload: "VFS へフォルダをアップロード",
                 titleRefreshVfs: "VFS を更新",
                 titleResetVfs: "VFS をリセット",
@@ -1840,6 +1843,9 @@
                 scriptStateCleared: "Script_Explorer saved data cleared.",
                 scriptStateRestored: "Script_Explorer restored from LocalStorage.",
                 scriptStateSaveFailed: "Failed to save Script_Explorer (storage may be full): {message}",
+                scriptExplorerSaved: "Saved to Script_Explorer: {path}",
+                scriptExplorerSaveAmbiguous: "Multiple files named \"{name}\". Re-open from Script_Explorer to save.",
+                scriptExplorerSaveUnavailable: "Cannot save with Ctrl+S while Script_Explorer is {type}.",
                 titleVfsUpload: "Upload folder to VFS",
                 titleRefreshVfs: "Refresh VFS",
                 titleResetVfs: "Reset VFS",
@@ -2733,6 +2739,8 @@ await main_async_def()
         };
 
         // ローカルにファイルを保存する機能 (Ctrl + S)
+        // ステートフル時: Script_Explorer (local_upload) へ書き戻し + LS 永続化
+        // ステートレス時: 従来どおり Blob ダウンロード
         window.addEventListener("keydown", (e) => {
             // Ctrl + S または Cmd + S（Mac）
             if ((e.ctrlKey || e.metaKey) && e.key === "s") {
@@ -2741,6 +2749,13 @@ await main_async_def()
                 if (content === null) {
                     return; // タブ無し・未確定タブでは何もしない
                 }
+
+                // state=1: Script_Explorer へ保存（ダウンロードしない）
+                if (ideStatefulMode) {
+                    save_active_tab_to_script_explorer(content);
+                    return;
+                }
+
                 const blob = new Blob([content], { type: "text/plain" });
 
                 const a = document.createElement("a");
@@ -2890,11 +2905,15 @@ await main_async_def()
         }
 
         //-------------------------------------------------------- ### Create_&_Open_Tab ###
-        // options: { forceUpdate?: boolean, githubPath?: string|null }
+        // options: { forceUpdate?: boolean, githubPath?: string|null, scriptPath?: string|null }
         function open_tab(file_name, content, is_preview = false, options = {}) {
             const forceUpdate = options && options.forceUpdate === true;
             const githubPathOpt = options && Object.prototype.hasOwnProperty.call(options, "githubPath")
                 ? options.githubPath
+                : undefined;
+            // Script_Explorer (local_upload) 由来の論理パス（ステートフル Ctrl+S 用）
+            const scriptPathOpt = options && Object.prototype.hasOwnProperty.call(options, "scriptPath")
+                ? options.scriptPath
                 : undefined;
 
             // 既に同じ名前のタブが開いているか確認
@@ -2912,6 +2931,9 @@ await main_async_def()
                     }
                     if (githubPathOpt !== undefined) {
                         tabs_data[id].githubPath = githubPathOpt;
+                    }
+                    if (scriptPathOpt !== undefined) {
+                        tabs_data[id].scriptPath = scriptPathOpt;
                     }
                     activate_tab(id);
                     return;
@@ -2960,7 +2982,8 @@ await main_async_def()
                 type: type, // タブの種類
                 content: content, // プレビューの場合はBlobURL、エディタの場合は初期値など
                 scroll_state: null,
-                githubPath: githubPathOpt !== undefined ? githubPathOpt : null // GitHub 上の相対パス（token は持たない）
+                githubPath: githubPathOpt !== undefined ? githubPathOpt : null, // GitHub 上の相対パス（token は持たない）
+                scriptPath: scriptPathOpt !== undefined ? scriptPathOpt : null // Script_Explorer 論理パス
             };
 
             // --- DOM要素の作成 ---
@@ -3758,18 +3781,143 @@ setup_web_serial();
 
         /**
          * ステートフル時: 更新(⟳)ボタンを × に差し替え
+         * SVG は #reset_vfs_explorer（VFS をリセット）と同一デザイン
          */
         function setup_stateful_script_clear_button() {
             if (!ideStatefulMode || !refresh_script_button) return;
-            // 既存 ⟳ SVG を × に置換（サイドバー他ボタンと同系の stroke アイコン）
+            // VFS リセットボタンと同じ filled polygon ×
             refresh_script_button.innerHTML =
-                '<svg viewBox="0 0 48 48" width="16" height="16" fill="none" stroke="currentColor" ' +
-                'stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-                '<line x1="12" y1="12" x2="36" y2="36"></line>' +
-                '<line x1="36" y1="12" x2="12" y2="36"></line>' +
+                '<svg viewBox="0 0 512 512" width="12" height="12" fill="currentColor" aria-hidden="true">' +
+                "<g>" +
+                '<polygon class="st0" points="512,89.75 422.256,0.005 256.004,166.256 89.754,0.005 0,89.75 166.255,256 0,422.25 89.754,511.995 ' +
+                '256.004,345.745 422.26,511.995 512,422.25 345.744,256"></polygon>' +
+                "</g>" +
                 "</svg>";
             refresh_script_button.setAttribute("data-i18n-title", "titleClearScriptState");
             refresh_script_button.setAttribute("title", t("titleClearScriptState"));
+        }
+
+        /**
+         * ツリー内で name が一致する file ノードを収集（曖昧判定用）
+         * @param {Array} nodes
+         * @param {string} fileName
+         * @param {Array} [out]
+         * @returns {Array}
+         */
+        function collect_script_file_nodes_by_name(nodes, fileName, out) {
+            const acc = out || [];
+            if (!Array.isArray(nodes) || !fileName) return acc;
+            for (const node of nodes) {
+                if (!node) continue;
+                if (node.type === "file" && node.name === fileName) {
+                    acc.push(node);
+                } else if (node.type === "folder" && Array.isArray(node.children)) {
+                    collect_script_file_nodes_by_name(node.children, fileName, acc);
+                }
+            }
+            return acc;
+        }
+
+        /**
+         * ステートフル時 Ctrl+S: アクティブタブ内容を Script_Explorer (local_upload) へ書き戻し
+         * @param {string} content
+         * @returns {boolean} 保存できたとき true
+         */
+        function save_active_tab_to_script_explorer(content) {
+            if (!ideStatefulMode) return false;
+            if (content == null || typeof content !== "string") return false;
+
+            const treeType = scriptExplorerState.type;
+            // github / DirectoryHandle local は書き戻し対象外
+            if (treeType === "github" || treeType === "local") {
+                js_result_area_element.value = t("scriptExplorerSaveUnavailable", {
+                    type: treeType || "unknown"
+                });
+                return false;
+            }
+
+            const activeTab = (active_tab_id && tabs_data[active_tab_id])
+                ? tabs_data[active_tab_id]
+                : null;
+            const tabName = (activeTab && activeTab.name)
+                || file_name_val
+                || "python_script.py";
+
+            // ルート新規用のファイル名にパス区切りを含めない
+            const baseName = String(tabName).replace(/\\/g, "/").split("/").pop();
+            if (!baseName || baseName === "." || baseName === ".." || baseName.includes("..")) {
+                js_result_area_element.value = t("scriptExplorerSaveUnavailable", { type: "invalid_name" });
+                return false;
+            }
+
+            let tree = Array.isArray(scriptExplorerState.tree)
+                ? scriptExplorerState.tree
+                : [];
+            // パス解決用に script_path を付与
+            if (tree.length > 0) {
+                ensure_script_paths(tree, "");
+            }
+
+            let targetNode = null;
+            let savedPath = null;
+
+            // 1) タブに scriptPath があればそれを優先
+            const tabScriptPath = activeTab && activeTab.scriptPath
+                ? normalize_script_relative_path(activeTab.scriptPath)
+                : null;
+            if (tabScriptPath) {
+                targetNode = find_script_node_by_path(tree, tabScriptPath);
+                if (targetNode && targetNode.type === "file") {
+                    savedPath = tabScriptPath;
+                } else {
+                    targetNode = null;
+                }
+            }
+
+            // 2) path 無し / 不一致: 名前一意なら更新、0 件なら新規、複数は拒否
+            if (!targetNode) {
+                const matches = collect_script_file_nodes_by_name(tree, baseName);
+                if (matches.length > 1) {
+                    js_result_area_element.value = t("scriptExplorerSaveAmbiguous", { name: baseName });
+                    return false;
+                }
+                if (matches.length === 1) {
+                    targetNode = matches[0];
+                    savedPath = targetNode.script_path || baseName;
+                }
+            }
+
+            const fileObj = new File([content], baseName, { type: "text/plain" });
+
+            if (targetNode) {
+                // 既存ファイルの handle を差し替え
+                targetNode.handle = fileObj;
+                targetNode.name = baseName;
+                if (!savedPath) {
+                    savedPath = targetNode.script_path || baseName;
+                }
+            } else {
+                // ルートに新規ファイルを追加（tree 空含む）
+                const newNode = {
+                    name: baseName,
+                    type: "file",
+                    handle: fileObj
+                };
+                tree = tree.slice(); // 参照を差し替えて再描画を明確化
+                tree.push(newNode);
+                ensure_script_paths(tree, "");
+                savedPath = newNode.script_path || baseName;
+            }
+
+            // タブへ scriptPath を同期（次回 Ctrl+S 用）
+            if (activeTab) {
+                activeTab.scriptPath = savedPath;
+            }
+            file_name_val = baseName;
+
+            set_script_explorer_tree("local_upload", tree);
+            js_result_area_element.value = t("scriptExplorerSaved", { path: savedPath });
+            return true;
         }
 
         /**
@@ -4068,11 +4216,12 @@ setup_web_serial();
         }
 
         //-------------------------------------------------------- ### update_editor ###
-        function update_editor_with_content(file_name, content, source_desc) {
+        // options: open_tab へ転送（scriptPath / forceUpdate 等）
+        function update_editor_with_content(file_name, content, source_desc, options) {
             try {
                 if (!editor) throw new Error("Editor not initialized");
 
-                open_tab(file_name, content);
+                open_tab(file_name, content, false, options || {});
                 const code = editor.getValue();
                 analyze_python_code(code);
 
@@ -4269,7 +4418,10 @@ setup_web_serial();
 
                     if (type === "drive") load_file_content(item.id, item.name);
                     else if (type === "local") load_local_file_content_from_handle(item.handle, item.name);
-                    else if (type === "local_upload") load_local_file_content_from_file(item.handle, item.name);
+                    else if (type === "local_upload") {
+                        // script_path をタブへ渡し、ステートフル Ctrl+S の書き戻し先にする
+                        load_local_file_content_from_file(item.handle, item.name, item.script_path || null);
+                    }
                     else if (type === "vfs") load_local_file_content_from_vfs(item.vfs_path, item.name);
                     else if (type === "github") load_github_file_content(item.path, item.name);
                 });
@@ -4498,7 +4650,8 @@ setup_web_serial();
         }
 
         //-------------------------------------------------------- ### ファイルアップロード (File Object) から読み込む ###
-        async function load_local_file_content_from_file(file_object, file_name) {
+        // scriptPath: Script_Explorer 上の論理パス（ステートフル Ctrl+S 用。任意）
+        async function load_local_file_content_from_file(file_object, file_name, scriptPath) {
 
             if (!file_object || typeof file_object.text !== "function") {
                 js_result_area_element.value = `Error: Not a valid File object.`;
@@ -4509,8 +4662,11 @@ setup_web_serial();
                 file_name_val = file_name;
 
                 const content = await file_object.text();
-
-                update_editor_with_content(file_name, content, "Local File");
+                const openOpts = {};
+                if (scriptPath != null && scriptPath !== "") {
+                    openOpts.scriptPath = scriptPath;
+                }
+                update_editor_with_content(file_name, content, "Local File", openOpts);
 
             } catch (err) {
                 js_result_area_element.value = `Error: ${err.message}`;
