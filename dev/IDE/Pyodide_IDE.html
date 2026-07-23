@@ -1736,6 +1736,8 @@
         //-------------------------------------------------------- ### UI i18n (ホスト注入 uiLang) ###
         // ホストの host_injected_constants で uiLang が渡される。未定義時は ja。
         const ideUiLang = (typeof uiLang !== "undefined" && uiLang === "en") ? "en" : "ja";
+        // ステートフルモード（Host 注入）。Script_Explorer を Host localStorage 経由で保持。
+        const ideStatefulMode = (typeof statefulMode !== "undefined" && statefulMode === true);
         try {
             document.documentElement.lang = ideUiLang;
         } catch (e) { /* ignore */ }
@@ -1782,6 +1784,11 @@
                 newTabTitle: "新しいタブ",
                 titleScriptUpload: "スクリプトフォルダをアップロード",
                 titleRefreshScript: "Script を更新",
+                titleClearScriptState: "保存データをクリア",
+                clearScriptStateConfirm: "Script_Explorer の保存データ（LocalStorage）と表示中のツリーを削除します。\nよろしいですか？",
+                scriptStateCleared: "Script_Explorer の保存データをクリアしました。",
+                scriptStateRestored: "Script_Explorer を LocalStorage から復元しました。",
+                scriptStateSaveFailed: "Script_Explorer の保存に失敗しました（容量超過の可能性）: {message}",
                 titleVfsUpload: "VFS へフォルダをアップロード",
                 titleRefreshVfs: "VFS を更新",
                 titleResetVfs: "VFS をリセット",
@@ -1828,6 +1835,11 @@
                 newTabTitle: "New tab",
                 titleScriptUpload: "Upload script folder",
                 titleRefreshScript: "Refresh Script",
+                titleClearScriptState: "Clear saved Script data",
+                clearScriptStateConfirm: "Delete Script_Explorer saved data (LocalStorage) and the current tree?\nThis cannot be undone.",
+                scriptStateCleared: "Script_Explorer saved data cleared.",
+                scriptStateRestored: "Script_Explorer restored from LocalStorage.",
+                scriptStateSaveFailed: "Failed to save Script_Explorer (storage may be full): {message}",
                 titleVfsUpload: "Upload folder to VFS",
                 titleRefreshVfs: "Refresh VFS",
                 titleResetVfs: "Reset VFS",
@@ -1866,6 +1878,7 @@
         // Pyodide (Python) から定型 UI 文言を取るための公開
         try { globalThis.__uiT = t; } catch (e) { /* ignore */ }
         console.log("# IDE_frame_log : uiLang :", ideUiLang);
+        console.log("# IDE_frame_log : ideStatefulMode :", ideStatefulMode);
 
 
         //-------------------------------------------------------- ### global_variables
@@ -1942,6 +1955,10 @@
         //-------------------------------------------------------- ### Script_Explorer 状態（移動・追記用ソース・オブ・トゥルース）
         // type: "local_upload" | "local" | "github" | null
         let scriptExplorerState = { type: null, tree: null };
+
+        // ステートフル: 復元中は自動 save を抑止 / 連続 save の世代管理
+        let scriptExplorerStateRestoring = false;
+        let scriptExplorerSaveGeneration = 0;
 
         //-------------------------------------------------------- ### エクスプローラー展開状態（再描画後も維持）
         // script: Script_Explorer（local / local_upload / github 共通）
@@ -2611,6 +2628,16 @@ await main_async_def()
                 else if (data.cmd === "script_drop_error") {
                     js_result_area_element.value = `Script Drop Error: ${data.message || "unknown"}`;
                     toggle_loading(false);
+                }
+
+                //-------------------------------------------------------- ### Script_Explorer ステートフル restore / save エラー
+                else if (data.cmd === "script_explorer_state_restore") {
+                    apply_script_explorer_state_restore(data.obj || data);
+                }
+                else if (data.cmd === "script_explorer_state_save_error") {
+                    js_result_area_element.value = t("scriptStateSaveFailed", {
+                        message: data.message || "unknown"
+                    });
                 }
 
                 //-------------------------------------------------------- ### Agent_Run_Handler
@@ -3519,6 +3546,8 @@ setup_web_serial();
                 if (type !== "github") {
                     script_explorer_element.textContent = t("scriptExplorerHint");
                 }
+                // ステートフル: local_upload の空／更新を Host LS へ反映
+                schedule_script_explorer_persist();
                 return;
             }
             // local_upload / local は移動・ヒットテスト用に script_path を付与
@@ -3526,6 +3555,221 @@ setup_web_serial();
                 ensure_script_paths(scriptExplorerState.tree, "");
             }
             render_file_explorer(scriptExplorerState.tree, type, script_explorer_element);
+            // ステートフル: local_upload 変更時のみ永続化（github / local は対象外）
+            schedule_script_explorer_persist();
+        }
+
+        //-------------------------------------------------------- ### Script_Explorer ステートフル永続化 ###
+        /** ArrayBuffer → Base64（大きなファイルはチャンクで fromCharCode） */
+        function array_buffer_to_base64(buffer) {
+            const bytes = new Uint8Array(buffer);
+            const chunkSize = 0x8000;
+            let binary = "";
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+                const slice = bytes.subarray(i, i + chunkSize);
+                binary += String.fromCharCode.apply(null, slice);
+            }
+            return btoa(binary);
+        }
+
+        /** Base64 → Uint8Array */
+        function base64_to_uint8_array(b64) {
+            const binary = atob(String(b64 || ""));
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+                bytes[i] = binary.charCodeAt(i);
+            }
+            return bytes;
+        }
+
+        /**
+         * 実行時ツリーを LS 保存用 JSON 形へ（File handle → Base64）
+         * @param {Array} nodes
+         * @returns {Promise<Array>}
+         */
+        async function serialize_script_tree_for_storage(nodes) {
+            if (!Array.isArray(nodes)) return [];
+            const out = [];
+            for (const node of nodes) {
+                if (!node || !node.name) continue;
+                if (node.type === "folder") {
+                    out.push({
+                        name: node.name,
+                        type: "folder",
+                        children: await serialize_script_tree_for_storage(node.children || [])
+                    });
+                    continue;
+                }
+                // ファイル: handle (File) から本文を読む
+                let contentBase64 = "";
+                const handle = node.handle;
+                if (handle && typeof handle.arrayBuffer === "function") {
+                    try {
+                        const buf = await handle.arrayBuffer();
+                        contentBase64 = array_buffer_to_base64(buf);
+                    } catch (err) {
+                        console.warn("serialize file failed:", node.name, err);
+                        contentBase64 = "";
+                    }
+                }
+                out.push({
+                    name: node.name,
+                    type: "file",
+                    encoding: "base64",
+                    contentBase64: contentBase64
+                });
+            }
+            return out;
+        }
+
+        /**
+         * LS 形ツリー → 実行時ツリー（File を再生成）
+         * @param {Array} nodes
+         * @returns {Array}
+         */
+        function deserialize_script_tree_from_storage(nodes) {
+            if (!Array.isArray(nodes)) return [];
+            const out = [];
+            for (const node of nodes) {
+                if (!node || !node.name) continue;
+                if (node.type === "folder") {
+                    out.push({
+                        name: node.name,
+                        type: "folder",
+                        handle: null,
+                        children: deserialize_script_tree_from_storage(node.children || [])
+                    });
+                    continue;
+                }
+                const bytes = base64_to_uint8_array(node.contentBase64 || "");
+                // 復元後は local_upload と同じく File を handle に載せる
+                const file = new File([bytes], node.name, {
+                    type: "application/octet-stream"
+                });
+                out.push({
+                    name: node.name,
+                    type: "file",
+                    handle: file
+                });
+            }
+            return out;
+        }
+
+        /**
+         * local_upload 変更を Host へ非同期 save（古い世代は破棄）
+         * github / local / 復元中は送らない
+         */
+        function schedule_script_explorer_persist() {
+            if (!ideStatefulMode || scriptExplorerStateRestoring) return;
+            // github / DirectoryHandle local は永続化対象外（既存 LS も消さない）
+            if (scriptExplorerState.type === "github" || scriptExplorerState.type === "local") {
+                return;
+            }
+
+            const generation = ++scriptExplorerSaveGeneration;
+
+            // 空 or type null → LS キー削除
+            if (
+                scriptExplorerState.type !== "local_upload" ||
+                !Array.isArray(scriptExplorerState.tree) ||
+                scriptExplorerState.tree.length === 0
+            ) {
+                js_post_message("script_explorer_state_clear", "host", "*", {}, []);
+                return;
+            }
+
+            const treeRef = scriptExplorerState.tree;
+            const expandedSnapshot = Array.from(explorerExpandedPaths.script);
+
+            (async () => {
+                try {
+                    const serialized = await serialize_script_tree_for_storage(treeRef);
+                    // より新しい変更があればこの結果は捨てる
+                    if (generation !== scriptExplorerSaveGeneration) return;
+                    js_post_message("script_explorer_state_save", "host", "*", {
+                        type: "local_upload",
+                        tree: serialized,
+                        expandedPaths: expandedSnapshot
+                    }, []);
+                } catch (err) {
+                    console.warn("script explorer persist failed:", err);
+                    if (generation === scriptExplorerSaveGeneration) {
+                        js_result_area_element.value = t("scriptStateSaveFailed", {
+                            message: err && err.message ? err.message : String(err)
+                        });
+                    }
+                }
+            })();
+        }
+
+        /**
+         * Host からの restore を適用
+         * @param {object} payload - { version, tree, expandedPaths } or { empty: true }
+         */
+        function apply_script_explorer_state_restore(payload) {
+            if (!ideStatefulMode) return;
+            if (!payload || payload.empty === true) return;
+            if (payload.type && payload.type !== "local_upload") return;
+            if (!Array.isArray(payload.tree) || payload.tree.length === 0) return;
+
+            scriptExplorerStateRestoring = true;
+            try {
+                // 展開パスを先に復元（描画時に参照される）
+                explorerExpandedPaths.script.clear();
+                if (Array.isArray(payload.expandedPaths)) {
+                    for (const p of payload.expandedPaths) {
+                        if (p != null && p !== "") {
+                            explorerExpandedPaths.script.add(p);
+                        }
+                    }
+                }
+                const tree = deserialize_script_tree_from_storage(payload.tree);
+                set_script_explorer_tree("local_upload", tree);
+                js_result_area_element.value = t("scriptStateRestored");
+            } catch (err) {
+                console.error("script explorer restore failed:", err);
+                js_result_area_element.value = `Restore Error: ${err.message || err}`;
+            } finally {
+                scriptExplorerStateRestoring = false;
+            }
+        }
+
+        /**
+         * × ボタン: LocalStorage クリア + 表示中ツリー破棄
+         */
+        function clear_script_explorer_persisted_state() {
+            if (!ideStatefulMode) return;
+            if (!confirm(t("clearScriptStateConfirm"))) return;
+
+            // Host LS 削除
+            js_post_message("script_explorer_state_clear", "host", "*", {}, []);
+            // 進行中の save を無効化
+            scriptExplorerSaveGeneration++;
+
+            githubExplorerActive = false;
+            // 表示は空 hint へ（GitHub 表示中でもクリア）
+            scriptExplorerState = { type: null, tree: null };
+            explorerExpandedPaths.script.clear();
+            if (script_explorer_element) {
+                script_explorer_element.textContent = t("scriptExplorerHint");
+            }
+            js_result_area_element.value = t("scriptStateCleared");
+        }
+
+        /**
+         * ステートフル時: 更新(⟳)ボタンを × に差し替え
+         */
+        function setup_stateful_script_clear_button() {
+            if (!ideStatefulMode || !refresh_script_button) return;
+            // 既存 ⟳ SVG を × に置換（サイドバー他ボタンと同系の stroke アイコン）
+            refresh_script_button.innerHTML =
+                '<svg viewBox="0 0 48 48" width="16" height="16" fill="none" stroke="currentColor" ' +
+                'stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                '<line x1="12" y1="12" x2="36" y2="36"></line>' +
+                '<line x1="36" y1="12" x2="12" y2="36"></line>' +
+                "</svg>";
+            refresh_script_button.setAttribute("data-i18n-title", "titleClearScriptState");
+            refresh_script_button.setAttribute("title", t("titleClearScriptState"));
         }
 
         /**
@@ -6491,14 +6735,21 @@ sys.stderr = Web_Stdout()
                 setup_footer_resizer();
                 //document.querySelector("header").style.zIndex = "9999";
                 py_result_area_element.value = t("readyBanner");
-                js_post_message("script_complete", "host", "*", {}, []);
-                console.log("# IDE_frame_log : script_complete")
-                //-------------------------------------------------------- ### Refresh Button Logic ###
+                //-------------------------------------------------------- ### Refresh / Clear Button Logic ###
+                // ステートフル時は ⟳ を × に差し替え、LocalStorage + 表示をクリア
                 if (refresh_script_button) {
-                    refresh_script_button.addEventListener("click", (e) => {
-                        e.stopPropagation(); // h3のクリックイベントを止める
-                        refresh_script_explorer_view();
-                    });
+                    if (ideStatefulMode) {
+                        setup_stateful_script_clear_button();
+                        refresh_script_button.addEventListener("click", (e) => {
+                            e.stopPropagation(); // h3のクリックイベントを止める
+                            clear_script_explorer_persisted_state();
+                        });
+                    } else {
+                        refresh_script_button.addEventListener("click", (e) => {
+                            e.stopPropagation(); // h3のクリックイベントを止める
+                            refresh_script_explorer_view();
+                        });
+                    }
                 }
 
                 if (refresh_vfs_button) {
@@ -6533,6 +6784,11 @@ sys.stderr = Web_Stdout()
                 // VFSツリーの初期スキャン
                 refresh_vfs_explorer_view();
                 js_result_area_element.value = "All_Ready...";
+
+                // Explorer UI 初期化後に Host へ ready 通知
+                // （ステートフル restore が refresh で上書きされないよう、ここより前には送らない）
+                js_post_message("script_complete", "host", "*", {}, []);
+                console.log("# IDE_frame_log : script_complete");
 
             } catch (error) {
                 js_result_area_element.value = `Initialization Error: ${error}`;
@@ -6573,6 +6829,14 @@ sys.stderr = Web_Stdout()
             const dev_flag = (() => { // 開発フラグがあるか判定
                 const url_params = new URLSearchParams(window.location.search);
                 return url_params.get("dev") === "true" ? true : false
+            })();
+
+            //-------------------------------------------------------- ### ステートフルモード (state クエリ) ###
+            // Script_Explorer (local_upload) を Host localStorage に保持するオプトイン。
+            // キーは小文字 state、値は "1" のみ有効（State 大文字は無効）。
+            const statefulMode = (() => {
+                const urlParams = new URLSearchParams(window.location.search);
+                return urlParams.get("state") === "1";
             })();
 
             //-------------------------------------------------------- ### UI i18n (lang クエリ) ###
@@ -7979,6 +8243,8 @@ sys.stderr = Web_Stdout()
 		console.log("# IDE_frame_log : githubFeatureEnabled :", githubFeatureEnabled, typeof githubFeatureEnabled);
 		const uiLang = ${JSON.stringify(uiLang)};
 		console.log("# IDE_frame_log : uiLang :", uiLang, typeof uiLang);
+		const statefulMode = ${JSON.stringify(statefulMode)};
+		console.log("# IDE_frame_log : statefulMode :", statefulMode, typeof statefulMode);
 	<\/script>
   `;
 
@@ -9500,6 +9766,92 @@ ${newRawLog}`;
                 }
             });
 
+            //-------------------------------------------------------- ### Script_Explorer ステートフル永続化（Host localStorage） ###
+            // IDE は null origin のため LS 不可。Host が代理で読み書きする。
+            const SCRIPT_EXPLORER_LS_KEY = "Pyodide_IDE.scriptExplorer.v1";
+            // script_complete は実行完了にも使うため、restore は起動後 1 回だけ
+            let scriptExplorerRestoreSent = false;
+
+            /** localStorage からスナップショットを読む（壊れていれば null） */
+            function loadScriptExplorerStateFromStorage() {
+                if (!statefulMode) return null;
+                try {
+                    const raw = localStorage.getItem(SCRIPT_EXPLORER_LS_KEY);
+                    if (!raw) return null;
+                    const parsed = JSON.parse(raw);
+                    if (!parsed || parsed.version !== 1) {
+                        localStorage.removeItem(SCRIPT_EXPLORER_LS_KEY);
+                        return null;
+                    }
+                    if (parsed.type !== "local_upload" || !Array.isArray(parsed.tree)) {
+                        return null;
+                    }
+                    return parsed;
+                } catch (err) {
+                    console.warn("# host_frame_log : scriptExplorer LS load failed:", err);
+                    try { localStorage.removeItem(SCRIPT_EXPLORER_LS_KEY); } catch (e2) { /* ignore */ }
+                    return null;
+                }
+            }
+
+            /** シリアライズ済みスナップショットを localStorage へ保存 */
+            function saveScriptExplorerStateToStorage(snapshot) {
+                if (!statefulMode) return;
+                try {
+                    const payload = {
+                        version: 1,
+                        savedAt: new Date().toISOString(),
+                        type: "local_upload",
+                        tree: snapshot.tree,
+                        expandedPaths: Array.isArray(snapshot.expandedPaths)
+                            ? snapshot.expandedPaths
+                            : []
+                    };
+                    localStorage.setItem(SCRIPT_EXPLORER_LS_KEY, JSON.stringify(payload));
+                } catch (err) {
+                    console.warn("# host_frame_log : scriptExplorer LS save failed:", err);
+                    // QuotaExceeded 等: Host は落とさない。IDE へ通知可能なら送る
+                    try {
+                        if (frame && frame.contentWindow) {
+                            frame.contentWindow.postMessage({
+                                cmd: "script_explorer_state_save_error",
+                                message: String(err && err.message ? err.message : err)
+                            }, "*");
+                        }
+                    } catch (e2) { /* ignore */ }
+                }
+            }
+
+            /** 永続データを削除 */
+            function clearScriptExplorerStateStorage() {
+                if (!statefulMode) return;
+                try {
+                    localStorage.removeItem(SCRIPT_EXPLORER_LS_KEY);
+                } catch (err) {
+                    console.warn("# host_frame_log : scriptExplorer LS clear failed:", err);
+                }
+            }
+
+            /** IDE 準備後に 1 回だけ restore を送る */
+            function sendScriptExplorerStateRestoreToIde() {
+                if (!statefulMode || scriptExplorerRestoreSent) return;
+                if (!frame || !frame.contentWindow) return;
+                scriptExplorerRestoreSent = true;
+                const saved = loadScriptExplorerStateFromStorage();
+                if (saved) {
+                    frame.contentWindow.postMessage({
+                        cmd: "script_explorer_state_restore",
+                        obj: saved
+                    }, "*");
+                } else {
+                    frame.contentWindow.postMessage({
+                        cmd: "script_explorer_state_restore",
+                        obj: { empty: true }
+                    }, "*");
+                }
+                console.log("# host_frame_log : script_explorer_state_restore sent", !!saved);
+            }
+
             //-------------------------------------------------------- ### host_frame_post_message_汎用受信 ###
             window.addEventListener("message", async (event) => {
 
@@ -9591,6 +9943,23 @@ ${newRawLog}`;
                         }
                         return;
                     }
+                    // Script_Explorer ステートフル: IDE → Host の保存 / クリア
+                    if (data.cmd === "script_explorer_state_save") {
+                        if (!statefulMode) return;
+                        const obj = data.obj || {};
+                        if (obj.type === "local_upload" && Array.isArray(obj.tree)) {
+                            saveScriptExplorerStateToStorage({
+                                tree: obj.tree,
+                                expandedPaths: obj.expandedPaths
+                            });
+                        }
+                        return;
+                    }
+                    if (data.cmd === "script_explorer_state_clear") {
+                        if (!statefulMode) return;
+                        clearScriptExplorerStateStorage();
+                        return;
+                    }
                 }
 
                 // ブックマークレット連携（外部LLM）からの応答の場合のみ連続エラーを判定
@@ -9618,6 +9987,10 @@ ${newRawLog}`;
                     console.log("# host_frame_log : script_complete")
                     set_header_buttons_state(true);
                     set_stop_button_state(true);
+                    // IDE 初回 ready 時のみ Script_Explorer 復元（実行完了の script_complete では再送しない）
+                    if (event.source === frame.contentWindow) {
+                        sendScriptExplorerStateRestoreToIde();
+                    }
                     //-------------------------------------------------------- ### Return_Result_to_Gemini
                     if (typeof data.obj.log !== "undefined") {
                         const responsePayload = {
