@@ -4451,11 +4451,17 @@ setup_web_serial();
                         const types = Array.from((e.dataTransfer && e.dataTransfer.types) || []);
                         const is_internal = types.includes("application/script-path");
                         e.dataTransfer.dropEffect = is_internal ? "move" : "copy";
+                        // キャンセル時の破線残留防止（心拍 / dragend と併用）
+                        if (typeof touch_explorer_dnd_highlight_activity === "function") {
+                            touch_explorer_dnd_highlight_activity();
+                        }
                     });
 
                     row_div.addEventListener("dragleave", (e) => {
                         e.preventDefault();
                         e.stopPropagation();
+                        // 子要素への移動では消さない（dragleave の誤発火対策）
+                        if (e.relatedTarget && row_div.contains(e.relatedTarget)) return;
                         row_div.classList.remove("script_drop_target");
                     });
 
@@ -4463,6 +4469,9 @@ setup_web_serial();
                         e.preventDefault();
                         e.stopPropagation();
                         row_div.classList.remove("script_drop_target");
+                        if (typeof clear_all_explorer_dnd_highlights === "function") {
+                            clear_all_explorer_dnd_highlights();
+                        }
 
                         // 1) Script 内部移動
                         const src_path = e.dataTransfer.getData("application/script-path");
@@ -4498,11 +4507,15 @@ setup_web_serial();
                         // 内部移動は move、OS からの DnD は copy
                         const is_internal = Array.from(e.dataTransfer.types || []).includes("application/vfs-path");
                         e.dataTransfer.dropEffect = is_internal ? "move" : "copy";
+                        if (typeof touch_explorer_dnd_highlight_activity === "function") {
+                            touch_explorer_dnd_highlight_activity();
+                        }
                     });
 
                     row_div.addEventListener("dragleave", (e) => {
                         e.preventDefault();
                         e.stopPropagation();
+                        if (e.relatedTarget && row_div.contains(e.relatedTarget)) return;
                         row_div.classList.remove("vfs_drop_target");
                     });
 
@@ -4510,6 +4523,9 @@ setup_web_serial();
                         e.preventDefault();
                         e.stopPropagation(); // コンテナ側への二重処理を防止
                         row_div.classList.remove("vfs_drop_target");
+                        if (typeof clear_all_explorer_dnd_highlights === "function") {
+                            clear_all_explorer_dnd_highlights();
+                        }
 
                         // 1) VFS 内部の移動（従来動作・IDE 内で完結）
                         const src_path = e.dataTransfer.getData("application/vfs-path");
@@ -5898,6 +5914,30 @@ json.dumps(result)
             js_post_message("script_external_drag_enter", "host", "*", {}, []);
         }
 
+        // ハイライト付与後にイベントが途切れたら自動解除（OS DnD は dragend が来ない）
+        let explorerDndHighlightActivityMs = 0;
+        let explorerDndHighlightWatchdogId = null;
+        const EXPLORER_DND_HIGHLIGHT_IDLE_MS = 250;
+        const EXPLORER_DND_HIGHLIGHT_WATCHDOG_MS = 100;
+
+        function stop_explorer_dnd_highlight_watchdog() {
+            if (explorerDndHighlightWatchdogId != null) {
+                clearInterval(explorerDndHighlightWatchdogId);
+                explorerDndHighlightWatchdogId = null;
+            }
+        }
+
+        /** 破線ハイライトが付いている間、心拍が止まれば自動クリア */
+        function touch_explorer_dnd_highlight_activity() {
+            explorerDndHighlightActivityMs = Date.now();
+            if (explorerDndHighlightWatchdogId != null) return;
+            explorerDndHighlightWatchdogId = setInterval(() => {
+                if (Date.now() - explorerDndHighlightActivityMs >= EXPLORER_DND_HIGHLIGHT_IDLE_MS) {
+                    clear_all_explorer_dnd_highlights();
+                }
+            }, EXPLORER_DND_HIGHLIGHT_WATCHDOG_MS);
+        }
+
         /**
          * VFS 外部 DnD のホバー破線（フォルダ行 / コンテナ）を解除する
          * Host キャンセル・ゾーン外退出・drop 成功時に呼ぶ
@@ -5927,13 +5967,14 @@ json.dumps(result)
         function clear_all_explorer_dnd_highlights() {
             clear_vfs_dnd_highlight();
             clear_script_dnd_highlight();
+            stop_explorer_dnd_highlight_watchdog();
         }
 
         /**
          * ホストからのヒットテスト要求: iframe 内座標 (x,y) のドロップ先パスを返す
          */
         function handle_vfs_dnd_hit_test(x, y) {
-            // 前回の強調を解除
+            // 前回の強調を解除（watchdog は止めず、再ハイライト時に心拍更新）
             clear_vfs_dnd_highlight();
 
             const el = document.elementFromPoint(x, y);
@@ -5957,6 +5998,8 @@ json.dumps(result)
                 // コンテナ直下（フォルダ行以外）→ ルート
                 vfs_container_element.classList.add("dragover");
             }
+            // hit_test が続く限り心拍。停止＝キャンセルとみなして自動解除
+            touch_explorer_dnd_highlight_activity();
 
             js_post_message("vfs_dnd_target", "host", "*", { path: path, in_vfs: true }, []);
         }
@@ -6120,11 +6163,14 @@ json.dumps(result)
                     drop_zone.classList.add("dragover");
                     e.dataTransfer.dropEffect = "copy";
                     notify_host_vfs_external_drag();
+                    touch_explorer_dnd_highlight_activity();
                 }
             });
 
             drop_zone.addEventListener("dragleave", (e) => {
                 e.preventDefault();
+                // 子要素への移動では消さない
+                if (e.relatedTarget && drop_zone.contains(e.relatedTarget)) return;
                 drop_zone.classList.remove("dragover");
             });
 
@@ -6172,6 +6218,7 @@ json.dumps(result)
             } else {
                 script_container_element.classList.add("dragover");
             }
+            touch_explorer_dnd_highlight_activity();
 
             js_post_message("script_dnd_target", "host", "*", { path: path, in_script: true }, []);
         }
@@ -6305,23 +6352,27 @@ json.dumps(result)
                     drop_zone.classList.add("dragover");
                     e.dataTransfer.dropEffect = "copy";
                     notify_host_script_external_drag();
+                    touch_explorer_dnd_highlight_activity();
                 } else {
                     // 内部移動時もコンテナ上で drop を許可（ルートへ移動）
                     const types = Array.from((e.dataTransfer && e.dataTransfer.types) || []);
                     if (types.includes("application/script-path")) {
                         e.dataTransfer.dropEffect = "move";
+                        touch_explorer_dnd_highlight_activity();
                     }
                 }
             });
 
             drop_zone.addEventListener("dragleave", (e) => {
                 e.preventDefault();
+                if (e.relatedTarget && drop_zone.contains(e.relatedTarget)) return;
                 drop_zone.classList.remove("dragover");
             });
 
             drop_zone.addEventListener("drop", async (e) => {
                 e.preventDefault();
                 drop_zone.classList.remove("dragover");
+                clear_all_explorer_dnd_highlights();
 
                 if (githubExplorerActive || scriptExplorerState.type === "github") {
                     js_result_area_element.value = "Script drop is disabled while GitHub tree is shown.";
@@ -6341,6 +6392,18 @@ json.dumps(result)
             // 両ゾーン矩形 + リサイズ追従（VFS setup と二重登録しないよう Script 側に集約）
             report_all_explorer_drop_zone_rects();
             window.addEventListener("resize", report_all_explorer_drop_zone_rects);
+
+            // 内部 DnD 終了時（ソース要素の dragend が document に伝播）
+            // OS ファイル DnD では通常来ないが、来た場合も安全に解除する
+            document.addEventListener("dragend", () => {
+                clear_all_explorer_dnd_highlights();
+            }, true);
+
+            document.addEventListener("keydown", (e) => {
+                if (e.key === "Escape" || e.key === "Esc") {
+                    clear_all_explorer_dnd_highlights();
+                }
+            }, true);
         }
 
         //-------------------------------------------------------- ### VFS_File_mover ###
@@ -9471,6 +9534,11 @@ ${newRawLog}`;
             let hostDropProcessing = false;
             // ゾーン外 dragover での clear 通知スロットル（過剰 postMessage 防止）
             let hostLastExplorerDndClearMs = 0;
+            // OS 由来 DnD は document に dragend が来ないため、dragover 停止で終了判定する
+            let hostLastExternalDragOverMs = 0;
+            let hostExternalDragWatchdogId = null;
+            const HOST_EXTERNAL_DRAG_IDLE_MS = 200;
+            const HOST_EXTERNAL_DRAG_WATCHDOG_MS = 100;
 
             function hostHasExternalFiles(event) {
                 const types = Array.from((event.dataTransfer && event.dataTransfer.types) || []);
@@ -9478,6 +9546,29 @@ ${newRawLog}`;
                 if (types.includes("application/vfs-path")) return false;
                 if (types.includes("application/script-path")) return false;
                 return types.includes("Files") || types.includes("public.file-url") || types.includes("text/uri-list");
+            }
+
+            /** dragover が途切れたら capture 終了（OS ファイル DnD のキャンセル検知） */
+            function hostStopExternalDragWatchdog() {
+                if (hostExternalDragWatchdogId != null) {
+                    clearInterval(hostExternalDragWatchdogId);
+                    hostExternalDragWatchdogId = null;
+                }
+            }
+
+            function hostTouchExternalDragActivity() {
+                hostLastExternalDragOverMs = Date.now();
+                if (hostExternalDragWatchdogId != null) return;
+                hostExternalDragWatchdogId = setInterval(() => {
+                    if (!hostDropCaptureActive) {
+                        hostStopExternalDragWatchdog();
+                        return;
+                    }
+                    if (Date.now() - hostLastExternalDragOverMs >= HOST_EXTERNAL_DRAG_IDLE_MS) {
+                        // ポインタ解放・Esc・ウィンドウ外など: dragover が止まる
+                        hostEndDropCapture();
+                    }
+                }, HOST_EXTERNAL_DRAG_WATCHDOG_MS);
             }
 
             function hostGetZoneScreenRect(zoneName) {
@@ -9532,6 +9623,8 @@ ${newRawLog}`;
                 if (frame) {
                     frame.style.pointerEvents = "none";
                 }
+                // capture 開始時点から idle 監視（直後のキャンセルにも対応）
+                hostTouchExternalDragActivity();
             }
 
             /** IDE 側のフォルダ行 / コンテナ破線ハイライトを解除する */
@@ -9544,6 +9637,7 @@ ${newRawLog}`;
             function hostEndDropCapture() {
                 hostDropCaptureActive = false;
                 hostActiveDropZone = null;
+                hostStopExternalDragWatchdog();
                 hostExplorerDropOverlay.classList.remove("active");
                 hostDropZones.vfs.targetPath = hostDropZones.vfs.defaultPath;
                 hostDropZones.script.targetPath = hostDropZones.script.defaultPath;
@@ -9551,6 +9645,7 @@ ${newRawLog}`;
                     frame.style.pointerEvents = "";
                 }
                 // キャンセル / ゾーン外 drop / 正常 drop 直前: IDE の破線囲いを残さない
+                // （OS 由来 DnD は dragend が来ないため、idle watchdog からもここへ来る）
                 hostNotifyExplorerDndClear();
             }
 
@@ -9887,6 +9982,9 @@ ${newRawLog}`;
             document.addEventListener("dragover", (e) => {
                 if (!hostHasExternalFiles(e)) return;
 
+                // OS DnD 中は常に心拍更新（ゾーン内外問わず。停止＝キャンセル判定）
+                hostTouchExternalDragActivity();
+
                 const zoneName = hostFindZoneAtPoint(e.clientX, e.clientY);
                 if (zoneName) {
                     e.preventDefault();
@@ -9902,8 +10000,9 @@ ${newRawLog}`;
                         frame.contentWindow.postMessage({ cmd: hitCmd, x, y }, "*");
                     }
                 } else if (hostDropCaptureActive) {
-                    // キャプチャは dragend / drop まで維持（オーバーレイ再表示のチラつき防止）
+                    // キャプチャは idle / drop まで維持（オーバーレイ再表示のチラつき防止）
                     // ゾーン外では IDE の破線ハイライトだけ解除する
+                    e.preventDefault();
                     const now = Date.now();
                     if (now - hostLastExplorerDndClearMs >= 40) {
                         hostLastExplorerDndClearMs = now;
@@ -9922,11 +10021,33 @@ ${newRawLog}`;
                 }
             }, true);
 
+            // ウィンドウ外へ出たとき（relatedTarget が無い dragleave）
+            document.addEventListener("dragleave", (e) => {
+                if (!hostDropCaptureActive) return;
+                if (!hostHasExternalFiles(e)) return;
+                // document 自体から出た場合のみ（子要素間の leave は無視）
+                if (e.target !== document && e.target !== document.documentElement && e.target !== document.body) {
+                    return;
+                }
+                if (e.relatedTarget == null) {
+                    hostEndDropCapture();
+                }
+            }, true);
+
+            // Esc キャンセル（ブラウザによっては DnD 中に keydown が届く）
+            document.addEventListener("keydown", (e) => {
+                if (!hostDropCaptureActive) return;
+                if (e.key === "Escape" || e.key === "Esc") {
+                    hostEndDropCapture();
+                }
+            }, true);
+
             // オーバーレイ自身でも dragover/drop（キャプチャが取れない場合の保険）
             hostExplorerDropOverlay.addEventListener("dragover", (e) => {
                 if (!hostHasExternalFiles(e)) return;
                 e.preventDefault();
                 e.stopPropagation();
+                hostTouchExternalDragActivity();
                 try { e.dataTransfer.dropEffect = "copy"; } catch (err) { /* ignore */ }
                 hostPositionDropOverlay(hostActiveDropZone);
                 if (frame && frame.contentWindow && hostActiveDropZone) {
@@ -9945,6 +10066,7 @@ ${newRawLog}`;
                 hostOnExplorerDropEvent(e);
             });
 
+            // ページ内起点の DnD 用（OS ファイル DnD では通常発火しない）
             document.addEventListener("dragend", () => {
                 hostEndDropCapture();
             }, true);
