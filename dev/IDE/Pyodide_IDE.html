@@ -2750,7 +2750,7 @@ await main_async_def()
                     return; // タブ無し・未確定タブでは何もしない
                 }
 
-                // state=1: Script_Explorer へ保存（ダウンロードしない）
+                // state=ful: Script_Explorer へ保存（ダウンロードしない）
                 if (ideStatefulMode) {
                     save_active_tab_to_script_explorer(content);
                     return;
@@ -6989,10 +6989,10 @@ sys.stderr = Web_Stdout()
 
             //-------------------------------------------------------- ### ステートフルモード (state クエリ) ###
             // Script_Explorer (local_upload) を Host localStorage に保持するオプトイン。
-            // キーは小文字 state、値は "1" のみ有効（State 大文字は無効）。
+            // キーは小文字 state、値は "ful" のみ有効（State 大文字 / "1" / "full" 等は無効）。
             const statefulMode = (() => {
                 const urlParams = new URLSearchParams(window.location.search);
-                return urlParams.get("state") === "1";
+                return urlParams.get("state") === "ful";
             })();
 
             //-------------------------------------------------------- ### UI i18n (lang クエリ) ###
