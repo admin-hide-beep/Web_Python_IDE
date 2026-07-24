@@ -2603,7 +2603,11 @@ await main_async_def()
                     handle_github_host_message(data);
                 }
 
-                //-------------------------------------------------------- ### VFS DnD（ホスト代理読み取り → IDE 書き込み）
+                //-------------------------------------------------------- ### VFS / Script 外部 DnD（ホスト代理）
+                // キャンセル・ゾーン外退出時: Host がハイライト解除を要求
+                else if (data.cmd === "explorer_dnd_clear") {
+                    clear_all_explorer_dnd_highlights();
+                }
                 else if (data.cmd === "vfs_dnd_hit_test") {
                     handle_vfs_dnd_hit_test(data.x, data.y);
                 }
@@ -5895,16 +5899,42 @@ json.dumps(result)
         }
 
         /**
-         * ホストからのヒットテスト要求: iframe 内座標 (x,y) のドロップ先パスを返す
+         * VFS 外部 DnD のホバー破線（フォルダ行 / コンテナ）を解除する
+         * Host キャンセル・ゾーン外退出・drop 成功時に呼ぶ
          */
-        function handle_vfs_dnd_hit_test(x, y) {
-            // 前回の強調を解除
+        function clear_vfs_dnd_highlight() {
             document.querySelectorAll("#vfs_explorer_container .vfs_drop_target").forEach((el) => {
                 el.classList.remove("vfs_drop_target");
             });
             if (vfs_container_element) {
                 vfs_container_element.classList.remove("dragover");
             }
+        }
+
+        /**
+         * Script 外部 DnD のホバー破線（フォルダ行 / コンテナ）を解除する
+         */
+        function clear_script_dnd_highlight() {
+            document.querySelectorAll("#script_explorer_container .script_drop_target").forEach((el) => {
+                el.classList.remove("script_drop_target");
+            });
+            if (script_container_element) {
+                script_container_element.classList.remove("dragover");
+            }
+        }
+
+        /** VFS / Script 双方の外部 DnD ハイライトを一括解除 */
+        function clear_all_explorer_dnd_highlights() {
+            clear_vfs_dnd_highlight();
+            clear_script_dnd_highlight();
+        }
+
+        /**
+         * ホストからのヒットテスト要求: iframe 内座標 (x,y) のドロップ先パスを返す
+         */
+        function handle_vfs_dnd_hit_test(x, y) {
+            // 前回の強調を解除
+            clear_vfs_dnd_highlight();
 
             const el = document.elementFromPoint(x, y);
             if (!el) {
@@ -5952,10 +5982,7 @@ json.dumps(result)
 
             toggle_loading(true, "Processing Dropped Files...");
             js_result_area_element.value = "Processing dropped files...";
-            vfs_container_element.classList.remove("dragover");
-            document.querySelectorAll("#vfs_explorer_container .vfs_drop_target").forEach((el) => {
-                el.classList.remove("vfs_drop_target");
-            });
+            clear_vfs_dnd_highlight();
 
             try {
                 if (!pyodide_js || !pyodide_js.FS) {
@@ -6117,12 +6144,7 @@ json.dumps(result)
          * ホストからのヒットテスト: Script 領域内のドロップ先 script_path を返す
          */
         function handle_script_dnd_hit_test(x, y) {
-            document.querySelectorAll("#script_explorer_container .script_drop_target").forEach((el) => {
-                el.classList.remove("script_drop_target");
-            });
-            if (script_container_element) {
-                script_container_element.classList.remove("dragover");
-            }
+            clear_script_dnd_highlight();
 
             const el = document.elementFromPoint(x, y);
             if (!el) {
@@ -6170,12 +6192,7 @@ json.dumps(result)
 
             toggle_loading(true, "Processing Script Drop...");
             js_result_area_element.value = "Processing dropped files for Script_Explorer...";
-            if (script_container_element) {
-                script_container_element.classList.remove("dragover");
-            }
-            document.querySelectorAll("#script_explorer_container .script_drop_target").forEach((el) => {
-                el.classList.remove("script_drop_target");
-            });
+            clear_script_dnd_highlight();
 
             try {
                 const entries = [];
@@ -9452,6 +9469,8 @@ ${newRawLog}`;
             let hostActiveDropZone = null; // "vfs" | "script" | null
             let hostDropCaptureActive = false;
             let hostDropProcessing = false;
+            // ゾーン外 dragover での clear 通知スロットル（過剰 postMessage 防止）
+            let hostLastExplorerDndClearMs = 0;
 
             function hostHasExternalFiles(event) {
                 const types = Array.from((event.dataTransfer && event.dataTransfer.types) || []);
@@ -9515,6 +9534,13 @@ ${newRawLog}`;
                 }
             }
 
+            /** IDE 側のフォルダ行 / コンテナ破線ハイライトを解除する */
+            function hostNotifyExplorerDndClear() {
+                if (frame && frame.contentWindow) {
+                    frame.contentWindow.postMessage({ cmd: "explorer_dnd_clear" }, "*");
+                }
+            }
+
             function hostEndDropCapture() {
                 hostDropCaptureActive = false;
                 hostActiveDropZone = null;
@@ -9524,6 +9550,8 @@ ${newRawLog}`;
                 if (frame) {
                     frame.style.pointerEvents = "";
                 }
+                // キャンセル / ゾーン外 drop / 正常 drop 直前: IDE の破線囲いを残さない
+                hostNotifyExplorerDndClear();
             }
 
             /**
@@ -9874,7 +9902,13 @@ ${newRawLog}`;
                         frame.contentWindow.postMessage({ cmd: hitCmd, x, y }, "*");
                     }
                 } else if (hostDropCaptureActive) {
-                    // ゾーン外へ出たらキャプチャ解除は dragend / drop 側で行う
+                    // キャプチャは dragend / drop まで維持（オーバーレイ再表示のチラつき防止）
+                    // ゾーン外では IDE の破線ハイライトだけ解除する
+                    const now = Date.now();
+                    if (now - hostLastExplorerDndClearMs >= 40) {
+                        hostLastExplorerDndClearMs = now;
+                        hostNotifyExplorerDndClear();
+                    }
                 }
             }, true);
 
