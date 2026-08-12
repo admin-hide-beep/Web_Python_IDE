@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pyodide_IDE(v1.12.035)</title>
+    <title>Pyodide_IDE(v1.12.039)</title>
     <link rel="icon" type="image/png" href="favicon.png">
 
     <meta http-equiv="Content-Security-Policy" content="
@@ -12,7 +12,7 @@
 		script-src 'self' https://script.google.com 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com;
         style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net;
 		font-src 'self' https://cdnjs.cloudflare.com;
-		connect-src 'self' https://script.google.com https://script.googleusercontent.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://pypi.org https://files.pythonhosted.org https://api.github.com https://pyodide-ide-github-oauth.admin-hide.workers.dev;
+		connect-src 'self' https://script.google.com https://script.googleusercontent.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://pypi.org https://files.pythonhosted.org https://api.github.com https://pyodide-ide-github-oauth.admin-hide.workers.dev https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://api.x.ai http://127.0.0.1:* http://localhost:*;
 		frame-src 'self' blob: data:;
 		img-src 'self' data: blob:;
 		worker-src 'self' blob:;
@@ -294,6 +294,59 @@
             align-self: flex-start;
             border-left: 3px solid #b48ead;
             border-radius: 4px 10px 10px 4px;
+        }
+
+        /* LLM プロバイダ / BYOK 設定行 */
+        #llm-config-container {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--border-subtle);
+            background-color: var(--bg-elevated);
+            flex-shrink: 0;
+        }
+
+        .llm-config-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+        }
+
+        .llm-config-row label {
+            flex: 0 0 64px;
+            font-size: 10px;
+            color: var(--text-muted);
+            user-select: none;
+        }
+
+        .llm-config-row select,
+        .llm-config-row input[type="text"],
+        .llm-config-row input[type="password"] {
+            flex: 1;
+            min-width: 0;
+            height: 28px;
+            padding: 4px 8px;
+            background-color: var(--bg-input);
+            color: var(--text-primary);
+            border: 1px solid var(--border-strong);
+            border-radius: var(--radius-sm);
+            font-size: 11px;
+            font-family: var(--font-ui);
+            outline: none;
+        }
+
+        .llm-config-row select:focus,
+        .llm-config-row input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px var(--accent-soft);
+        }
+
+        .llm-config-row select:disabled,
+        .llm-config-row input:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
         }
 
         /* 入力エリア */
@@ -814,7 +867,7 @@
         <div id="ai_sidebar_resizer_v"></div>
         <div id="ai_sidebar" class="ai_sidebar_css">
             <div class="nano_header">
-                <span data-i18n="aiChatTitle">AI Chat (Gemini Nano)</span>
+                <span data-i18n="aiChatTitle">AI Chat</span>
                 <div class="nano_header_actions">
                     <span id="nano-status" data-i18n="nanoStatusIdle">未起動</span>
                     <button id="nano-reset-btn" title="セッションリセット" data-i18n-title="nanoResetTitle" type="button">
@@ -843,12 +896,42 @@
                     </button>
                 </div>
             </div>
+            <!-- LLM プロバイダ / BYOK 設定（キーはメモリ保持のみ・永続化しない） -->
+            <div id="llm-config-container">
+                <div class="llm-config-row">
+                    <label for="llm-provider-select" data-i18n="llmProviderLabel">Provider</label>
+                    <select id="llm-provider-select" title="LLM Provider">
+                        <option value="nano">Gemini Nano</option>
+                        <option value="openai">OpenAI</option>
+                        <option value="anthropic">Anthropic</option>
+                        <option value="google">Google AI Studio</option>
+                        <option value="xai">xAI</option>
+                        <option value="custom" data-i18n="llmProviderCustom">Custom (OpenAI互換)</option>
+                    </select>
+                </div>
+                <div class="llm-config-row" id="llm-model-row" hidden>
+                    <label for="llm-model-input" data-i18n="llmModelLabel">Model</label>
+                    <input type="text" id="llm-model-input" autocomplete="off" spellcheck="false"
+                        data-i18n-placeholder="llmModelPlaceholder" placeholder="model id">
+                </div>
+                <div class="llm-config-row" id="llm-api-key-row" hidden>
+                    <label for="llm-api-key-input" data-i18n="llmApiKeyLabel">API Key</label>
+                    <input type="password" id="llm-api-key-input" autocomplete="off" spellcheck="false"
+                        data-i18n-placeholder="llmApiKeyPlaceholder" placeholder="Bring Your Own Key">
+                </div>
+                <div class="llm-config-row" id="llm-base-url-row" hidden>
+                    <label for="llm-base-url-input" data-i18n="llmBaseUrlLabel">Base URL</label>
+                    <input type="text" id="llm-base-url-input" autocomplete="off" spellcheck="false"
+                        data-i18n-placeholder="llmBaseUrlPlaceholder"
+                        placeholder="http://127.0.0.1:11434/v1">
+                </div>
+            </div>
             <div id="nano-chat-container">
                 <div class="nano-msg nano-msg-hint" data-i18n-hint="en" data-i18n="nanoHint">
-                    You can launch Gemini nano and chat using the button below.
+                    Select a provider below. Nano uses on-device AI; cloud APIs need your own key (memory only).
                 </div>
                 <div class="nano-msg nano-msg-hint" data-i18n-hint="ja" data-i18n="nanoHint">
-                    下のボタンから Gemini nano を起動し、チャット出来ます
+                    プロバイダを選び、Nano または自前 API キーでチャットできます（キーはメモリのみ・永続化しません）
                 </div>
             </div>
             <div id="nano-input-container">
@@ -856,7 +939,7 @@
                     <input type="checkbox" id="nano-agent-toggle" checked>
                     <label for="nano-agent-toggle">🤖Agentic</label>
                     <input type="checkbox" id="nano-summary-toggle">
-                    <label for="nano-summary-toggle">📝Summarizer</label>
+                    <label for="nano-summary-toggle" id="nano-summary-label">📝Summarizer</label>
                     <select id="nano-lang-select">
                         <option value="auto">🌐 auto</option>
                         <option value="ja">ja</option>
@@ -2037,28 +2120,58 @@ await main_async_def()
         /* #################### ↓↓↓ script_js_call_by_pyodide ↓↓↓ #################### */
 
         //-------------------------------------------------------- ### post_message (ide_frame_to_host_frame) 送信 ###
+        // 非同期応答が必要な cmd は pending_host_requests に登録し、Host からの
+        // { req_id, status, result|error } で Promise を settle する（Python の await 対応）。
+        //
+        // Python から dict/list を渡す場合は呼び出し側で to_js() すること。
+        // PyProxy のまま postMessage すると DataCloneError になる（アプリ側では自動変換しない）。
         function js_post_message(cmd, target = "host", origin = "*", obj = {}, args = []) {
             return new Promise((resolve, reject) => {
                 console.log("# called_js_post_message :", cmd)
 
                 if (target == "host") { // host_frame に post_message
                     const req_id = "req_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9); // 一意のリクエストIDを生成
-                    if (cmd == "fetch_post" || cmd == "serial_write") { // 応答待ちリストに登録
+                    // fetch_post / serial_write / gas_call は Host（および先）の完了を待つ
+                    const needsHostResponse = (
+                        cmd == "fetch_post" ||
+                        cmd == "serial_write" ||
+                        cmd == "gas_call"
+                    );
+                    if (needsHostResponse) {
                         pending_host_requests[req_id] = { resolve, reject };
                     }
                     // host_frameウィンドウへメッセージ送信
+                    // obj/args は Structured Clone 可能なプレーン JS 値であること（Python は to_js）
                     const post_message_data = { "cmd": cmd, "req_id": req_id, "obj": obj, "args": args }
-                    window.parent.postMessage(post_message_data, origin);
+                    try {
+                        window.parent.postMessage(post_message_data, origin);
+                    } catch (postErr) {
+                        // 送信自体に失敗した場合は pending を解放して reject（Promise が永久待ちにならない）
+                        if (needsHostResponse && pending_host_requests[req_id]) {
+                            delete pending_host_requests[req_id];
+                            reject(postErr instanceof Error ? postErr : new Error(String(postErr)));
+                        }
+                    }
 
                 } else if (target == "preview") { // preview_frame に post_message
                     const frame = document.getElementById("preview_frame");
                     if (frame && frame.contentWindow) {
                         // データはJSONシリアライズ可能なオブジェクトである必要があります
                         // "*" 指定により、サンドボックス化された(null originの)iframeにも送信可能
-                        frame.contentWindow.postMessage(obj, origin);
-                        // console.log("Sent to preview:", obj);
-                        js_result_area.value = JSON.stringify(obj, null, 2);
+                        try {
+                            frame.contentWindow.postMessage(obj, origin);
+                            // console.log("Sent to preview:", obj);
+                            js_result_area.value = JSON.stringify(obj, null, 2);
+                            resolve(undefined);
+                        } catch (previewErr) {
+                            reject(previewErr instanceof Error ? previewErr : new Error(String(previewErr)));
+                        }
+                        return;
                     }
+                    // preview は応答待ちしない（即 resolve）
+                    resolve(undefined);
+                } else {
+                    reject(new Error("js_post_message: unknown target: " + String(target)));
                 }
             });
         }
@@ -7102,16 +7215,35 @@ sys.stderr = Web_Stdout()
                     githubLogout: "Logout",
                     githubClose: "Close",
                     loaderInit: "Sandbox を初期化中…",
-                    aiChatTitle: "AI Chat (Gemini Nano)",
+                    aiChatTitle: "AI Chat",
                     nanoStatusIdle: "未起動",
                     nanoStatusReady: "準備完了",
                     nanoStatusStarting: "起動中",
                     nanoResetTitle: "セッションリセット",
-                    nanoHint: "下のボタンから Gemini nano を起動し、チャット出来ます",
+                    nanoHint: "プロバイダを選び、Nano または自前 API キーでチャットできます（キーはメモリのみ・永続化しません）",
                     nanoPlaceholder: "指令を入力... (Enterで送信)",
                     nanoSend: "送信",
                     nanoAbort: "中断",
                     nanoStarting: "起動中",
+                    llmProviderLabel: "Provider",
+                    llmProviderCustom: "Custom (OpenAI互換)",
+                    llmModelLabel: "Model",
+                    llmModelPlaceholder: "モデル ID",
+                    llmApiKeyLabel: "API Key",
+                    llmApiKeyPlaceholder: "Bring Your Own Key（メモリのみ）",
+                    llmBaseUrlLabel: "Base URL",
+                    llmBaseUrlPlaceholder: "http://127.0.0.1:11434/v1",
+                    llmStatusReady: "API 待機",
+                    llmStatusContext: "🟢 文脈 {count} 通",
+                    llmStatusStreaming: "🔄 生成中...",
+                    llmStatusError: "❌ エラー",
+                    llmErrBadUrl: "Base URL が不正です。http:// または https:// で始まる URL を指定してください。",
+                    llmErrNoModel: "モデル名を入力してください。",
+                    llmErrNoKey: "API キーを入力してください（メモリ保持のみ・永続化しません）。",
+                    llmErrEmptyResponse: "（空の応答）",
+                    llmGenError: "⚠️ API エラー: {message}",
+                    llmErrHttp: "HTTP {status}",
+                    llmErrCors: "接続に失敗しました。CORS 未許可・CSP・ネットワーク・ローカル LLM 未起動の可能性があります。OpenAI/Anthropic/xAI はブラウザ直叩きで拒否されることが多いため、Custom でローカル互換エンドポイントを使うか、プロバイダの CORS 設定を確認してください。",
                     titleToggleSidebar: "サイドバー表示切替",
                     titleToggleAi: "AI サイドバー表示切替",
                     titleSave: "保存",
@@ -7190,16 +7322,35 @@ sys.stderr = Web_Stdout()
                     githubLogout: "Logout",
                     githubClose: "Close",
                     loaderInit: "Initializing Sandbox…",
-                    aiChatTitle: "AI Chat (Gemini Nano)",
+                    aiChatTitle: "AI Chat",
                     nanoStatusIdle: "Idle",
                     nanoStatusReady: "Ready",
                     nanoStatusStarting: "Starting",
                     nanoResetTitle: "Reset session",
-                    nanoHint: "Launch Gemini Nano with the controls below and start chatting.",
+                    nanoHint: "Select a provider. Nano is on-device; cloud APIs need your own key (kept in memory only, not persisted).",
                     nanoPlaceholder: "Enter a command... (Enter to send)",
                     nanoSend: "Send",
                     nanoAbort: "Stop",
                     nanoStarting: "Starting",
+                    llmProviderLabel: "Provider",
+                    llmProviderCustom: "Custom (OpenAI-compatible)",
+                    llmModelLabel: "Model",
+                    llmModelPlaceholder: "Model ID",
+                    llmApiKeyLabel: "API Key",
+                    llmApiKeyPlaceholder: "Bring Your Own Key (memory only)",
+                    llmBaseUrlLabel: "Base URL",
+                    llmBaseUrlPlaceholder: "http://127.0.0.1:11434/v1",
+                    llmStatusReady: "API idle",
+                    llmStatusContext: "🟢 context {count} msgs",
+                    llmStatusStreaming: "🔄 Generating...",
+                    llmStatusError: "❌ Error",
+                    llmErrBadUrl: "Invalid Base URL. Use an http:// or https:// URL.",
+                    llmErrNoModel: "Please enter a model name.",
+                    llmErrNoKey: "Please enter an API key (kept in memory only; not persisted).",
+                    llmErrEmptyResponse: "(empty response)",
+                    llmGenError: "⚠️ API error: {message}",
+                    llmErrHttp: "HTTP {status}",
+                    llmErrCors: "Request failed. Possible causes: CORS, CSP, network, or local LLM not running. OpenAI/Anthropic/xAI often block browser calls — use Custom with a local OpenAI-compatible endpoint, or check the provider CORS policy.",
                     titleToggleSidebar: "Toggle sidebar",
                     titleToggleAi: "Toggle AI sidebar",
                     titleSave: "Save",
@@ -7327,7 +7478,7 @@ sys.stderr = Web_Stdout()
             let gemini_window = null; // Geminiウィンドウの参照を保持する変数
 
             //-------------------------------------------------------- ### Gemini_Nano_Management
-            let activeAgentSource = null; // 現在Pythonスクリプトを実行要請しているエージェント ("NANO" | "WEB_BRIDGE")
+            let activeAgentSource = null; // 現在Pythonスクリプトを実行要請しているエージェント ("NANO" | "WEB_BRIDGE" | "API")
             // VFS ツリー取得の返送先（script 実行と独立させ、取り違えを防ぐ）
             let activeVfsTreeSource = null;
 
@@ -7501,6 +7652,13 @@ sys.stderr = Web_Stdout()
                 if (agentSource === "NANO") {
                     if (GNM && GNM.aiSession) {
                         GNM.sendSystemFeedback(JSON.stringify(payload, null, 4));
+                    }
+                } else if (agentSource === "API") {
+                    // 外部 LLM API 経路（ステートレス API のため履歴へ積んで再送）
+                    if (typeof LLM_API_AGENT !== "undefined" && LLM_API_AGENT) {
+                        LLM_API_AGENT.sendSystemFeedback(JSON.stringify(payload, null, 4));
+                    } else {
+                        console.warn("# host_frame_log : LLM_API_AGENT is not ready");
                     }
                 } else if (agentSource === "WEB_BRIDGE") {
                     if (window.opener && !window.opener.closed) {
@@ -8813,6 +8971,11 @@ sys.stderr = Web_Stdout()
 
                 // AIの応答生成を強制中断する処理
                 handleAbort() {
+                    if (typeof getSelectedLlmProvider === "function" && getSelectedLlmProvider() !== "nano") {
+                        if (typeof LLM_API_AGENT !== "undefined" && LLM_API_AGENT) {
+                            return LLM_API_AGENT.handleAbort();
+                        }
+                    }
                     if (this.abortController) {
                         this.abortController.abort(); // 中断シグナルを発火
                         console.log("[Gemini Nano] Generation aborted by user.");
@@ -8821,6 +8984,12 @@ sys.stderr = Web_Stdout()
 
                 // ユーザーメッセージの送信処理およびAI応答のストリーミング制御
                 async handleSend() {
+                    // 外部 LLM API 選択時は LlmApiAgent へ委譲（ステートレス + 履歴コンテキスト）
+                    if (typeof getSelectedLlmProvider === "function" && getSelectedLlmProvider() !== "nano") {
+                        if (typeof LLM_API_AGENT !== "undefined" && LLM_API_AGENT) {
+                            return LLM_API_AGENT.handleSend();
+                        }
+                    }
                     const text = this.userInput.value.trim();
                     if (!text) return;
 
@@ -9511,6 +9680,925 @@ ${newRawLog}`;
             const GNM = new GeminiNanoManager();
             GNM.initializeEvents();
 
+            //-------------------------------------------------------- ### LLM API Agent (BYOK / ステートレス + 履歴コンテキスト) ###
+            /**
+             * 外部 LLM API はステートレスなため、Host メモリ上の messages[] で
+             * マルチターン文脈とエージェント自律ループを再現する。
+             * API キーはメモリ（input.value 参照）のみ。sessionStorage / localStorage には書かない。
+             */
+            const LLM_PROVIDER_DEFAULTS = {
+                openai: {
+                    baseUrl: "https://api.openai.com/v1",
+                    model: "gpt-4o-mini",
+                    apiStyle: "openai"
+                },
+                anthropic: {
+                    baseUrl: "https://api.anthropic.com",
+                    model: "claude-sonnet-4-20250514",
+                    apiStyle: "anthropic"
+                },
+                google: {
+                    baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+                    model: "gemini-2.0-flash",
+                    apiStyle: "google"
+                },
+                xai: {
+                    baseUrl: "https://api.x.ai/v1",
+                    model: "grok-3-mini",
+                    apiStyle: "openai"
+                },
+                custom: {
+                    baseUrl: "http://127.0.0.1:11434/v1",
+                    model: "llama3",
+                    apiStyle: "openai"
+                }
+            };
+
+            // 履歴トリム: system を除く直近メッセージ数上限（メモリ・トークン肥大化対策）
+            const LLM_MAX_HISTORY_MESSAGES = 40;
+            // 1 メッセージあたりの目安文字上限（極端な script_result 対策）
+            const LLM_MAX_MESSAGE_CHARS = 24000;
+
+            /**
+             * 選択中プロバイダ ID を返す（nano | openai | ...）
+             */
+            function getSelectedLlmProvider() {
+                const el = document.getElementById("llm-provider-select");
+                return el && el.value ? el.value : "nano";
+            }
+
+            /**
+             * Base URL と path を安全に結合（末尾スラッシュの二重化を避ける）
+             */
+            function joinLlmUrl(baseUrl, pathSuffix) {
+                const base = String(baseUrl || "").trim().replace(/\/+$/, "");
+                const suffix = pathSuffix.startsWith("/") ? pathSuffix : ("/" + pathSuffix);
+                if (!base) {
+                    return suffix;
+                }
+                // 既に chat/completions で終わっている場合はそのまま
+                if (suffix === "/chat/completions" && /\/chat\/completions$/i.test(base)) {
+                    return base;
+                }
+                return base + suffix;
+            }
+
+            /**
+             * Custom Base URL の最低限バリデーション（http/https のみ）
+             */
+            function validateLlmBaseUrl(urlStr) {
+                let parsed;
+                try {
+                    parsed = new URL(String(urlStr || "").trim());
+                } catch (e) {
+                    return { ok: false, error: t("llmErrBadUrl") };
+                }
+                if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+                    return { ok: false, error: t("llmErrBadUrl") };
+                }
+                return { ok: true, url: parsed.href.replace(/\/+$/, "") };
+            }
+
+            /**
+             * メッセージ本文を文字数上限で切り詰め（配列コピーを最小化）
+             */
+            function clampLlmText(text, maxChars) {
+                const s = text == null ? "" : String(text);
+                if (s.length <= maxChars) {
+                    return s;
+                }
+                return s.slice(0, maxChars) + "\n…(truncated)";
+            }
+
+            class LlmApiAgent {
+                constructor() {
+                    // DOM（Nano と共有するチャット UI）
+                    this.statusElement = document.getElementById("nano-status");
+                    this.chatContainer = document.getElementById("nano-chat-container");
+                    this.userInput = document.getElementById("nano-user-input");
+                    this.sendBtn = document.getElementById("nano-send-btn");
+                    this.agentToggle = document.getElementById("nano-agent-toggle");
+                    this.providerSelect = document.getElementById("llm-provider-select");
+                    this.modelInput = document.getElementById("llm-model-input");
+                    this.apiKeyInput = document.getElementById("llm-api-key-input");
+                    this.baseUrlInput = document.getElementById("llm-base-url-input");
+
+                    // ステートレス API 用の会話コンテキスト（メモリのみ）
+                    this.messages = []; // { role, content }[]  system 先頭
+                    this.sessionStarted = false;
+                    this.isGenerating = false;
+                    this.abortController = null;
+
+                    // メモリ上の API キーキャッシュ（input からも都度読む。永続化しない）
+                    this.apiKeyMemory = "";
+                }
+
+                /**
+                 * プロバイダ UI の表示切替・デフォルトモデル投入
+                 */
+                syncProviderUi() {
+                    const provider = getSelectedLlmProvider();
+                    const isNano = provider === "nano";
+                    const isCustom = provider === "custom";
+
+                    const modelRow = document.getElementById("llm-model-row");
+                    const keyRow = document.getElementById("llm-api-key-row");
+                    const urlRow = document.getElementById("llm-base-url-row");
+                    const summaryToggle = document.getElementById("nano-summary-toggle");
+                    const summaryLabel = document.getElementById("nano-summary-label");
+                    const langSelect = document.getElementById("nano-lang-select");
+
+                    if (modelRow) modelRow.hidden = isNano;
+                    if (keyRow) keyRow.hidden = isNano;
+                    if (urlRow) urlRow.hidden = !isCustom;
+
+                    // Summarizer は Nano（Prompt API セッション）専用
+                    if (summaryToggle) {
+                        summaryToggle.disabled = !isNano;
+                        if (!isNano) {
+                            summaryToggle.checked = false;
+                        }
+                    }
+                    if (summaryLabel) {
+                        summaryLabel.style.opacity = isNano ? "" : "0.45";
+                    }
+                    // 言語 select は Nano セッション用。API では system にヒントを足すだけなので操作可のまま
+                    if (langSelect) {
+                        langSelect.disabled = isNano && GNM && !GNM.isFirstSession;
+                    }
+
+                    const defaults = LLM_PROVIDER_DEFAULTS[provider];
+                    if (defaults && this.modelInput) {
+                        // ユーザーが空、または前回プロバイダの既定値のままなら差し替え
+                        const cur = (this.modelInput.value || "").trim();
+                        const knownDefaults = Object.keys(LLM_PROVIDER_DEFAULTS).map((k) => LLM_PROVIDER_DEFAULTS[k].model);
+                        if (!cur || knownDefaults.indexOf(cur) !== -1) {
+                            this.modelInput.value = defaults.model;
+                        }
+                    }
+                    if (defaults && this.baseUrlInput && isCustom) {
+                        if (!(this.baseUrlInput.value || "").trim()) {
+                            this.baseUrlInput.value = defaults.baseUrl;
+                        }
+                    }
+
+                    if (isNano) {
+                        this.updateStatus(
+                            GNM && !GNM.isFirstSession ? t("nanoStatusReadyGreen") : t("nanoStatusIdle"),
+                            GNM && !GNM.isFirstSession ? "green" : "#aaa"
+                        );
+                    } else if (!this.sessionStarted) {
+                        this.updateStatus(t("llmStatusReady"), "#8ab4f8");
+                    } else {
+                        this.updateStatus(t("llmStatusContext", { count: Math.max(0, this.messages.length - 1) }), "green");
+                    }
+                }
+
+                updateStatus(text, color) {
+                    if (this.statusElement) {
+                        this.statusElement.innerText = text;
+                        this.statusElement.style.color = color || "#aaa";
+                    }
+                }
+
+                /**
+                 * input からキーを読みメモリへ（storage には絶対に書かない）
+                 */
+                readApiKeyFromUi() {
+                    const fromInput = this.apiKeyInput ? String(this.apiKeyInput.value || "") : "";
+                    this.apiKeyMemory = fromInput;
+                    return this.apiKeyMemory;
+                }
+
+                resetUiToReady() {
+                    this.isGenerating = false;
+                    this.abortController = null;
+                    if (this.userInput) this.userInput.disabled = false;
+                    if (this.sendBtn) {
+                        this.sendBtn.disabled = false;
+                        this.sendBtn.textContent = t("nanoSend");
+                        this.sendBtn.style.backgroundColor = "#3d9cf0";
+                    }
+                    // 生成中は設定をロックしていた場合の解除
+                    this.setConfigDisabled(false);
+                }
+
+                setConfigDisabled(disabled) {
+                    if (this.providerSelect) this.providerSelect.disabled = disabled;
+                    if (this.modelInput) this.modelInput.disabled = disabled;
+                    if (this.apiKeyInput) this.apiKeyInput.disabled = disabled;
+                    if (this.baseUrlInput) this.baseUrlInput.disabled = disabled;
+                }
+
+                appendMessage(text, sender, saveToLog) {
+                    // GNM と同じ見た目の吹き出し（textContent のみで XSS 回避）
+                    if (GNM && typeof GNM.appendMessage === "function") {
+                        return GNM.appendMessage(text, sender, saveToLog === true);
+                    }
+                    const msgDiv = document.createElement("div");
+                    msgDiv.classList.add("nano-msg");
+                    if (sender === "user") msgDiv.classList.add("nano-msg-user");
+                    else if (sender === "system") msgDiv.classList.add("nano-msg-system");
+                    else msgDiv.classList.add("nano-msg-ai");
+                    msgDiv.textContent = text;
+                    if (this.chatContainer) {
+                        this.chatContainer.appendChild(msgDiv);
+                        this.chatContainer.scrollTop = this.chatContainer.scrollHeight;
+                    }
+                    return msgDiv;
+                }
+
+                /**
+                 * エージェント / 通常チャット用 system プロンプトを構築
+                 */
+                buildSystemPrompt(firstInstruction) {
+                    const agentOn = !(this.agentToggle && !this.agentToggle.checked);
+                    const langSelect = document.getElementById("nano-lang-select");
+                    const lang = langSelect ? langSelect.value : "auto";
+                    let langHint = "";
+                    if (lang && lang !== "auto") {
+                        langHint = `\n- 応答言語のヒント: ${lang}\n`;
+                    }
+
+                    if (!agentOn) {
+                        return `# システムプロンプト
+- あなたは Pyodide Python IDE に接続されたアシスタントです
+- 簡潔に回答してください${langHint}`;
+                    }
+
+                    // 既存 Web ブリッジ用プロンプトをベースに、初回目的を埋め込む
+                    const purpose = firstInstruction
+                        ? `- あなたの目的はユーザーから与えられた以下の指示を自律的に達成することです\n  - ${firstInstruction}\n  - 目的を達成した後は後述の「目的達成」 json フォーマットで完了報告してください`
+                        : `- あなたはエージェンティックに動作し、ユーザーが与える目的を達成してください\n  - 目的を達成した後は後述の「目的達成」 json フォーマットで完了報告してください`;
+
+                    // custom_system_prompt は 02_gemini_nano_base.js で定義済み
+                    let base = typeof custom_system_prompt === "string" ? custom_system_prompt : "";
+                    // 「## 目的」セクションを差し替え（テンプレートの汎用目的を具体化）
+                    base = base.replace(
+                        /## 目的\n[\s\S]*?(?=### 目的を達成するためのツール)/,
+                        `## 目的\n${purpose}\n`
+                    );
+                    return base + langHint;
+                }
+
+                /**
+                 * messages を上限内にトリム（system は常に残す）
+                 */
+                trimMessages() {
+                    if (this.messages.length <= 1) return;
+                    const system = this.messages[0];
+                    let rest = this.messages.slice(1);
+                    if (rest.length > LLM_MAX_HISTORY_MESSAGES) {
+                        rest = rest.slice(rest.length - LLM_MAX_HISTORY_MESSAGES);
+                    }
+                    // 各 content の極端な長さを抑制（新しい配列を一度だけ構築）
+                    const clamped = rest.map((m) => ({
+                        role: m.role,
+                        content: clampLlmText(m.content, LLM_MAX_MESSAGE_CHARS)
+                    }));
+                    this.messages = [system].concat(clamped);
+                }
+
+                /**
+                 * 初回セッション開始: system を messages に載せる
+                 */
+                ensureSession(firstInstruction) {
+                    if (this.sessionStarted && this.messages.length > 0) {
+                        return true;
+                    }
+                    const systemPrompt = this.buildSystemPrompt(firstInstruction || "");
+                    this.messages = [{ role: "system", content: systemPrompt }];
+                    this.sessionStarted = true;
+                    return true;
+                }
+
+                /**
+                 * 現在の UI から接続設定を解決
+                 */
+                resolveConnection() {
+                    const provider = getSelectedLlmProvider();
+                    if (provider === "nano") {
+                        return { ok: false, error: "nano" };
+                    }
+                    const defaults = LLM_PROVIDER_DEFAULTS[provider] || LLM_PROVIDER_DEFAULTS.custom;
+                    const model = (this.modelInput && this.modelInput.value.trim()) || defaults.model;
+                    if (!model) {
+                        return { ok: false, error: t("llmErrNoModel") };
+                    }
+
+                    let baseUrl = defaults.baseUrl;
+                    if (provider === "custom") {
+                        const checked = validateLlmBaseUrl(this.baseUrlInput ? this.baseUrlInput.value : "");
+                        if (!checked.ok) {
+                            return { ok: false, error: checked.error };
+                        }
+                        baseUrl = checked.url;
+                    }
+
+                    const apiKey = this.readApiKeyFromUi();
+                    // custom 以外はキー必須。custom はローカル LLM を想定し空を許可
+                    if (provider !== "custom" && !apiKey) {
+                        return { ok: false, error: t("llmErrNoKey") };
+                    }
+
+                    return {
+                        ok: true,
+                        provider: provider,
+                        apiStyle: defaults.apiStyle,
+                        baseUrl: baseUrl,
+                        model: model,
+                        apiKey: apiKey
+                    };
+                }
+
+                handleAbort() {
+                    if (this.abortController) {
+                        this.abortController.abort();
+                        console.log("[LLM API] Generation aborted by user.");
+                    }
+                }
+
+                async handleSend() {
+                    const text = this.userInput ? this.userInput.value.trim() : "";
+                    if (!text) return;
+
+                    const conn = this.resolveConnection();
+                    if (!conn.ok) {
+                        alert(conn.error);
+                        return;
+                    }
+
+                    this.appendMessage(text, "user", false);
+                    if (this.userInput) this.userInput.value = "";
+
+                    // 初回は system に目的を埋め込み、以降は履歴で文脈維持
+                    if (!this.sessionStarted) {
+                        this.ensureSession(text);
+                    }
+
+                    this.messages.push({ role: "user", content: text });
+                    this.trimMessages();
+
+                    await this.runCompletion(conn);
+                }
+
+                /**
+                 * エージェント実行結果などを履歴に積んで再リクエスト
+                 */
+                async sendSystemFeedback(feedbackText) {
+                    if (!this.sessionStarted) return;
+
+                    // エージェント OFF ならループしない
+                    if (this.agentToggle && !this.agentToggle.checked) {
+                        this.appendMessage(feedbackText, "system", false);
+                        return;
+                    }
+
+                    this.appendMessage(feedbackText, "system", false);
+
+                    const conn = this.resolveConnection();
+                    if (!conn.ok) {
+                        this.appendMessage(String(conn.error), "system", false);
+                        return;
+                    }
+
+                    const wrapped = `[システムからの実行結果]\n${feedbackText}`;
+                    this.messages.push({ role: "user", content: wrapped });
+                    this.trimMessages();
+
+                    await this.runCompletion(conn);
+                }
+
+                /**
+                 * ストリーミング完了まで UI を生成中モードにして API を叩く
+                 */
+                async runCompletion(conn) {
+                    const aiMsgDiv = this.appendMessage("...", "ai", false);
+
+                    this.isGenerating = true;
+                    const controller = new AbortController();
+                    this.abortController = controller;
+                    this.setConfigDisabled(true);
+
+                    if (this.userInput) this.userInput.disabled = true;
+                    if (this.sendBtn) {
+                        this.sendBtn.textContent = t("nanoAbort");
+                        this.sendBtn.style.backgroundColor = "#e06c75";
+                        this.sendBtn.disabled = false;
+                    }
+                    this.updateStatus(t("llmStatusStreaming"), "orange");
+
+                    let fullText = "";
+                    try {
+                        fullText = await this.streamChat(conn, this.messages, controller.signal, (chunk) => {
+                            if (aiMsgDiv.textContent === "...") {
+                                aiMsgDiv.textContent = "";
+                            }
+                            aiMsgDiv.textContent += chunk;
+                            if (this.chatContainer) {
+                                this.chatContainer.scrollTop = this.chatContainer.scrollHeight;
+                            }
+                        });
+
+                        if (!fullText && aiMsgDiv.textContent && aiMsgDiv.textContent !== "...") {
+                            fullText = aiMsgDiv.textContent;
+                        }
+                        if (!fullText) {
+                            aiMsgDiv.textContent = t("llmErrEmptyResponse");
+                        }
+
+                        // アシスタント応答を履歴へ（次回リクエストのコンテキスト）
+                        if (fullText) {
+                            this.messages.push({ role: "assistant", content: fullText });
+                            this.trimMessages();
+                        }
+
+                        this.updateStatus(
+                            t("llmStatusContext", { count: Math.max(0, this.messages.length - 1) }),
+                            "green"
+                        );
+
+                        // Agentic コマンド解析
+                        this.parseAndExecuteCommand(fullText || "");
+                    } catch (error) {
+                        console.error("[LLM API] stream error:", error);
+                        if (error && error.name === "AbortError") {
+                            aiMsgDiv.textContent = t("nanoUserAborted");
+                            aiMsgDiv.style.color = "orange";
+                        } else {
+                            let msg = (error && error.message) ? error.message : String(error);
+                            // ブラウザの CORS / ネットワーク失敗は TypeError: Failed to fetch になりやすい
+                            if (error && error.name === "TypeError") {
+                                msg = t("llmErrCors");
+                            }
+                            // キーを含む可能性のある生レスポンスは出さない
+                            aiMsgDiv.textContent = t("llmGenError", { message: msg });
+                            aiMsgDiv.style.color = "red";
+                        }
+                        this.updateStatus(t("llmStatusError"), "red");
+                    } finally {
+                        if (this.abortController === controller) {
+                            this.resetUiToReady();
+                            if (this.userInput) this.userInput.focus();
+                        }
+                    }
+                }
+
+                parseAndExecuteCommand(text) {
+                    if (this.agentToggle && !this.agentToggle.checked) {
+                        return;
+                    }
+                    const commandData = parseAgentResponse(text);
+                    if (trackAgentResponseStatus(commandData.cmd)) {
+                        alert(t("agentStopNano"));
+                        this.appendMessage(t("agentForceStopMsg"), "system", false);
+                        return;
+                    }
+                    try {
+                        executeAgentCommand(commandData, "API");
+                    } catch (error) {
+                        console.error("[LLM API] command execution error:", error);
+                    }
+                }
+
+                /**
+                 * プロバイダ別ストリーミングの入口
+                 * @returns {Promise<string>} 結合テキスト
+                 */
+                async streamChat(conn, messages, signal, onChunk) {
+                    if (conn.apiStyle === "anthropic") {
+                        return await this.streamAnthropic(conn, messages, signal, onChunk);
+                    }
+                    if (conn.apiStyle === "google") {
+                        return await this.streamGoogle(conn, messages, signal, onChunk);
+                    }
+                    return await this.streamOpenAiCompatible(conn, messages, signal, onChunk);
+                }
+
+                /**
+                 * OpenAI / xAI / Custom 互換 Chat Completions (SSE)
+                 */
+                async streamOpenAiCompatible(conn, messages, signal, onChunk) {
+                    const url = joinLlmUrl(conn.baseUrl, "/chat/completions");
+                    const headers = {
+                        "Content-Type": "application/json"
+                    };
+                    if (conn.apiKey) {
+                        headers["Authorization"] = "Bearer " + conn.apiKey;
+                    }
+
+                    const body = {
+                        model: conn.model,
+                        messages: messages,
+                        stream: true
+                    };
+
+                    const response = await fetch(url, {
+                        method: "POST",
+                        headers: headers,
+                        body: JSON.stringify(body),
+                        signal: signal
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(await this.safeErrorMessage(response));
+                    }
+                    return await this.consumeOpenAiStyleSse(response, onChunk);
+                }
+
+                /**
+                 * Anthropic Messages API (SSE)
+                 */
+                async streamAnthropic(conn, messages, signal, onChunk) {
+                    const url = joinLlmUrl(conn.baseUrl, "/v1/messages");
+                    // system は別フィールド。user/assistant のみ messages へ
+                    let systemText = "";
+                    const anthMessages = [];
+                    for (let i = 0; i < messages.length; i++) {
+                        const m = messages[i];
+                        if (m.role === "system") {
+                            systemText += (systemText ? "\n\n" : "") + m.content;
+                        } else if (m.role === "user" || m.role === "assistant") {
+                            // 連続同ロールは結合（Anthropic 制約）
+                            const last = anthMessages.length ? anthMessages[anthMessages.length - 1] : null;
+                            if (last && last.role === m.role) {
+                                last.content += "\n\n" + m.content;
+                            } else {
+                                anthMessages.push({ role: m.role, content: m.content });
+                            }
+                        }
+                    }
+                    if (anthMessages.length === 0) {
+                        anthMessages.push({ role: "user", content: "(empty)" });
+                    }
+
+                    const headers = {
+                        "Content-Type": "application/json",
+                        "x-api-key": conn.apiKey,
+                        "anthropic-version": "2023-06-01",
+                        // ブラウザ直叩き用（CORS が許可されている場合）
+                        "anthropic-dangerous-direct-browser-access": "true"
+                    };
+
+                    const body = {
+                        model: conn.model,
+                        max_tokens: 8192,
+                        stream: true,
+                        messages: anthMessages
+                    };
+                    if (systemText) {
+                        body.system = systemText;
+                    }
+
+                    const response = await fetch(url, {
+                        method: "POST",
+                        headers: headers,
+                        body: JSON.stringify(body),
+                        signal: signal
+                    });
+                    if (!response.ok) {
+                        throw new Error(await this.safeErrorMessage(response));
+                    }
+                    return await this.consumeAnthropicSse(response, onChunk);
+                }
+
+                /**
+                 * Google AI Studio streamGenerateContent (SSE)
+                 */
+                async streamGoogle(conn, messages, signal, onChunk) {
+                    const model = encodeURIComponent(conn.model);
+                    const keyQ = conn.apiKey ? ("&key=" + encodeURIComponent(conn.apiKey)) : "";
+                    const url = joinLlmUrl(conn.baseUrl, `/models/${model}:streamGenerateContent`) + `?alt=sse${keyQ}`;
+
+                    let systemText = "";
+                    const contents = [];
+                    for (let i = 0; i < messages.length; i++) {
+                        const m = messages[i];
+                        if (m.role === "system") {
+                            systemText += (systemText ? "\n\n" : "") + m.content;
+                        } else {
+                            const role = m.role === "assistant" ? "model" : "user";
+                            const last = contents.length ? contents[contents.length - 1] : null;
+                            if (last && last.role === role) {
+                                last.parts[0].text += "\n\n" + m.content;
+                            } else {
+                                contents.push({ role: role, parts: [{ text: m.content }] });
+                            }
+                        }
+                    }
+                    if (contents.length === 0) {
+                        contents.push({ role: "user", parts: [{ text: "(empty)" }] });
+                    }
+
+                    const body = { contents: contents };
+                    if (systemText) {
+                        body.system_instruction = { parts: [{ text: systemText }] };
+                    }
+
+                    const response = await fetch(url, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(body),
+                        signal: signal
+                    });
+                    if (!response.ok) {
+                        throw new Error(await this.safeErrorMessage(response));
+                    }
+                    return await this.consumeGoogleSse(response, onChunk);
+                }
+
+                /**
+                 * エラーボディから安全な短いメッセージを作る（キーをログに残さない）
+                 */
+                async safeErrorMessage(response) {
+                    let detail = "";
+                    try {
+                        const raw = await response.text();
+                        detail = clampLlmText(raw.replace(/sk-[a-zA-Z0-9]+/g, "[redacted]"), 400);
+                    } catch (e) {
+                        detail = "";
+                    }
+                    const base = t("llmErrHttp", { status: response.status });
+                    // CORS 失敗時は status 0 や TypeError 側で処理されることが多い
+                    if (response.status === 0) {
+                        return t("llmErrCors");
+                    }
+                    return detail ? (base + " " + detail) : base;
+                }
+
+                async consumeOpenAiStyleSse(response, onChunk) {
+                    // body が無い（CORS 網羅失敗など）場合
+                    if (!response.body || typeof response.body.getReader !== "function") {
+                        const text = await response.text();
+                        // 非ストリーム JSON フォールバック
+                        try {
+                            const json = JSON.parse(text);
+                            const content = json.choices && json.choices[0] && json.choices[0].message
+                                ? json.choices[0].message.content
+                                : text;
+                            if (content) onChunk(content);
+                            return content || "";
+                        } catch (e) {
+                            if (text) onChunk(text);
+                            return text || "";
+                        }
+                    }
+
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder("utf-8");
+                    let buffer = "";
+                    let full = "";
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split(/\r?\n/);
+                        buffer = lines.pop() || "";
+                        for (let i = 0; i < lines.length; i++) {
+                            const line = lines[i].trim();
+                            if (!line || !line.startsWith("data:")) continue;
+                            const data = line.slice(5).trim();
+                            if (data === "[DONE]") continue;
+                            try {
+                                const json = JSON.parse(data);
+                                const delta = json.choices && json.choices[0] && json.choices[0].delta
+                                    ? json.choices[0].delta.content
+                                    : "";
+                                if (delta) {
+                                    full += delta;
+                                    onChunk(delta);
+                                }
+                            } catch (e) {
+                                // 部分 JSON は無視
+                            }
+                        }
+                    }
+                    return full;
+                }
+
+                async consumeAnthropicSse(response, onChunk) {
+                    if (!response.body || typeof response.body.getReader !== "function") {
+                        const text = await response.text();
+                        try {
+                            const json = JSON.parse(text);
+                            const blocks = json.content || [];
+                            let content = "";
+                            for (let i = 0; i < blocks.length; i++) {
+                                if (blocks[i].type === "text") content += blocks[i].text || "";
+                            }
+                            if (content) onChunk(content);
+                            return content;
+                        } catch (e) {
+                            if (text) onChunk(text);
+                            return text || "";
+                        }
+                    }
+
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder("utf-8");
+                    let buffer = "";
+                    let full = "";
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split(/\r?\n/);
+                        buffer = lines.pop() || "";
+                        for (let i = 0; i < lines.length; i++) {
+                            const line = lines[i].trim();
+                            if (!line.startsWith("data:")) continue;
+                            const data = line.slice(5).trim();
+                            if (!data || data === "[DONE]") continue;
+                            try {
+                                const json = JSON.parse(data);
+                                if (json.type === "content_block_delta" && json.delta && json.delta.type === "text_delta") {
+                                    const delta = json.delta.text || "";
+                                    if (delta) {
+                                        full += delta;
+                                        onChunk(delta);
+                                    }
+                                }
+                            } catch (e) {
+                                // ignore
+                            }
+                        }
+                    }
+                    return full;
+                }
+
+                async consumeGoogleSse(response, onChunk) {
+                    if (!response.body || typeof response.body.getReader !== "function") {
+                        const text = await response.text();
+                        try {
+                            const json = JSON.parse(text);
+                            const arr = Array.isArray(json) ? json : [json];
+                            let content = "";
+                            for (let i = 0; i < arr.length; i++) {
+                                content += this.extractGoogleText(arr[i]);
+                            }
+                            if (content) onChunk(content);
+                            return content;
+                        } catch (e) {
+                            if (text) onChunk(text);
+                            return text || "";
+                        }
+                    }
+
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder("utf-8");
+                    let buffer = "";
+                    let full = "";
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split(/\r?\n/);
+                        buffer = lines.pop() || "";
+                        for (let i = 0; i < lines.length; i++) {
+                            const line = lines[i].trim();
+                            if (!line.startsWith("data:")) continue;
+                            const data = line.slice(5).trim();
+                            if (!data) continue;
+                            try {
+                                const json = JSON.parse(data);
+                                const piece = this.extractGoogleText(json);
+                                if (piece) {
+                                    full += piece;
+                                    onChunk(piece);
+                                }
+                            } catch (e) {
+                                // ignore
+                            }
+                        }
+                    }
+                    return full;
+                }
+
+                extractGoogleText(json) {
+                    try {
+                        const cands = json.candidates || [];
+                        if (!cands.length) return "";
+                        const parts = (cands[0].content && cands[0].content.parts) || [];
+                        let s = "";
+                        for (let i = 0; i < parts.length; i++) {
+                            if (parts[i].text) s += parts[i].text;
+                        }
+                        return s;
+                    } catch (e) {
+                        return "";
+                    }
+                }
+
+                /**
+                 * 会話コンテキストと UI 履歴をクリア（API キー欄は消さない）
+                 */
+                resetConversation(clearChatDom) {
+                    this.messages = [];
+                    this.sessionStarted = false;
+                    if (this.abortController) {
+                        try { this.abortController.abort(); } catch (e) { /* ignore */ }
+                    }
+                    this.resetUiToReady();
+                    if (clearChatDom && this.chatContainer) {
+                        this.chatContainer.innerHTML = "";
+                        const hint = document.createElement("div");
+                        hint.className = "nano-msg nano-msg-hint";
+                        hint.textContent = t("nanoHint");
+                        this.chatContainer.appendChild(hint);
+                    }
+                    this.updateStatus(t("llmStatusReady"), "#8ab4f8");
+                }
+            }
+
+            // グローバルインスタンス（sendResponseToAgent から参照）
+            const LLM_API_AGENT = new LlmApiAgent();
+
+            /**
+             * Nano / API の送信・中断・リセットをプロバイダに応じて振り分け
+             */
+            function wireAiSidebarRouting() {
+                if (!GNM) return;
+
+                // 既存リスナを差し替えるため、ボタンを clone してイベントを張り直す
+                const sendBtn = document.getElementById("nano-send-btn");
+                const resetBtn = document.getElementById("nano-reset-btn");
+                const userInput = document.getElementById("nano-user-input");
+                const providerSelect = document.getElementById("llm-provider-select");
+
+                if (sendBtn) {
+                    const freshSend = sendBtn.cloneNode(true);
+                    sendBtn.parentNode.replaceChild(freshSend, sendBtn);
+                    GNM.sendBtn = freshSend;
+                    LLM_API_AGENT.sendBtn = freshSend;
+                    freshSend.addEventListener("click", () => {
+                        const provider = getSelectedLlmProvider();
+                        if (provider === "nano") {
+                            if (GNM.isGenerating) GNM.handleAbort();
+                            else GNM.handleSend();
+                        } else {
+                            if (LLM_API_AGENT.isGenerating) LLM_API_AGENT.handleAbort();
+                            else LLM_API_AGENT.handleSend();
+                        }
+                    });
+                }
+
+                if (userInput) {
+                    // GNM が付けた keydown を残しつつ、API 時は Enter で API 送信
+                    userInput.addEventListener("keydown", (e) => {
+                        if (e.key !== "Enter" || e.shiftKey) return;
+                        if (getSelectedLlmProvider() === "nano") return; // GNM 側に任せる
+                        e.preventDefault();
+                        e.stopImmediatePropagation();
+                        if (!LLM_API_AGENT.isGenerating) {
+                            LLM_API_AGENT.handleSend();
+                        }
+                    }, true);
+                }
+
+                if (resetBtn) {
+                    const freshReset = resetBtn.cloneNode(true);
+                    resetBtn.parentNode.replaceChild(freshReset, resetBtn);
+                    GNM.resetBtn = freshReset;
+                    freshReset.addEventListener("click", async () => {
+                        const provider = getSelectedLlmProvider();
+                        if (provider === "nano") {
+                            await GNM.resetSession();
+                        } else {
+                            const ok = confirm(t("nanoResetConfirm"));
+                            if (!ok) return;
+                            LLM_API_AGENT.resetConversation(true);
+                            window.agent_memory = {};
+                            continuousErrorCount = 0;
+                        }
+                    });
+                }
+
+                if (providerSelect) {
+                    providerSelect.addEventListener("change", () => {
+                        // プロバイダ変更時は API 側コンテキストを破棄（混線防止）
+                        if (LLM_API_AGENT.sessionStarted) {
+                            LLM_API_AGENT.resetConversation(false);
+                        }
+                        continuousErrorCount = 0;
+                        LLM_API_AGENT.syncProviderUi();
+                    });
+                }
+
+                // API キーは input の都度メモリへ（永続化なし）
+                if (LLM_API_AGENT.apiKeyInput) {
+                    LLM_API_AGENT.apiKeyInput.addEventListener("input", () => {
+                        LLM_API_AGENT.readApiKeyFromUi();
+                    });
+                }
+
+                LLM_API_AGENT.syncProviderUi();
+            }
+
+            // GNM 初期化直後にルータを接続
+            wireAiSidebarRouting();
             //-------------------------------------------------------- ### 外部 DnD（ホスト側代理読み取り: VFS / Script マルチゾーン） ###
             // sandbox iframe (null origin) では DirectoryEntry が EncodingError になるため、
             // ホスト document が drop を受け、ファイルを読んで IDE へ postMessage する。
@@ -10177,6 +11265,12 @@ ${newRawLog}`;
                     return;
                 }
 
+                // GAS ランチャー（opener）からの gas_call_result を先に処理
+                // （10_gas_bridge.js の handleGasBridgeMessage。関数宣言は同一 IIFE 内でホイストされる）
+                if (typeof handleGasBridgeMessage === "function" && handleGasBridgeMessage(event)) {
+                    return;
+                }
+
                 const allowed_origins = [
                     "https://gemini.google.com"
                 ];
@@ -10379,6 +11473,29 @@ ${newRawLog}`;
                     return; // 処理終了
                 }
 
+                //-------------------------------------------------------- ### GAS 関数呼び出し（IDE → Host → opener ランチャー）
+                // Python: await js_post_message("gas_call", "host", "*", {"funcName": "..."}, [...])
+                // 実処理は 10_gas_bridge.js（非同期。結果は req_id 応答で IDE Promise を settle）
+                if (data && data.cmd === "gas_call") {
+                    if (event.source !== frame.contentWindow) {
+                        console.warn("Security Alert: gas_call from non-IDE source ignored.");
+                        return;
+                    }
+                    if (typeof handleGasCallFromIde === "function") {
+                        handleGasCallFromIde(data);
+                    } else {
+                        const req_id = data.req_id;
+                        if (req_id && frame && frame.contentWindow) {
+                            frame.contentWindow.postMessage({
+                                req_id,
+                                status: "error",
+                                error: "gas_call bridge not loaded"
+                            }, "*");
+                        }
+                    }
+                    return;
+                }
+
                 //-------------------------------------------------------- ### GitHub 連携（IDE → Host）※ token は含めない
                 if (data && typeof data.cmd === "string" && data.cmd.indexOf("github_") === 0) {
                     // IDE フレームからのみ受理
@@ -10474,6 +11591,218 @@ ${newRawLog}`;
                     return;
                 }
             });
+
+            // ※ IIFE 終端は 10_gas_bridge.js（gas_call ブリッジを同一スコープに含める）
+            //-------------------------------------------------------- ### GAS opener ブリッジ（gas_call） ###
+            // ランチャー（HtmlService）だけが google.script.run を持つ。
+            // トップレベル Host は window.opener へ中継し、非同期結果を IDE の req_id 応答へ変換する。
+            //
+            // 経路: Python → js_post_message("gas_call") → IDE → Host → opener → google.script.run
+            //                                         ← result/error ←←←←←←←←←←←←
+
+            const GAS_BRIDGE_CHANNEL = "pyodide-ide-gas";
+            const GAS_BRIDGE_VERSION = 1;
+            /** GAS 往復の上限（ms）。長い Drive / Sheets 処理を見込む */
+            const GAS_CALL_TIMEOUT_MS = 60000;
+            /** args + メタの JSON 概算サイズ上限（byte 相当文字数） */
+            const GAS_CALL_MAX_PAYLOAD_CHARS = 1024 * 1024;
+            /** funcName は識別子のみ（パス結合やコード片を拒否） */
+            const GAS_FUNC_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+            // req_id → { timerId }
+            // settle は IDE へ postMessage した時点で完了。Map はタイムアウト解除用。
+            const pendingGasCallTimers = new Map();
+
+            /**
+             * IDE へ gas_call の非同期結果を返す（fetch_post / serial_write と同形）
+             * @param {string} reqId
+             * @param {"success"|"error"} status
+             * @param {*} [resultOrError] success 時 result / error 時 error メッセージ
+             */
+            function replyGasCallToIde(reqId, status, resultOrError) {
+                // 二重応答防止: タイマが残っているときだけ正規応答とみなす
+                const entry = pendingGasCallTimers.get(reqId);
+                if (!entry) {
+                    console.warn("# host_frame_log : gas_call late/duplicate reply ignored:", reqId);
+                    return;
+                }
+                try {
+                    clearTimeout(entry.timerId);
+                } catch (e) { /* ignore */ }
+                pendingGasCallTimers.delete(reqId);
+
+                if (!frame || !frame.contentWindow) {
+                    console.warn("# host_frame_log : gas_call reply dropped (no IDE frame)");
+                    return;
+                }
+                try {
+                    if (status === "success") {
+                        frame.contentWindow.postMessage({
+                            req_id: reqId,
+                            status: "success",
+                            result: resultOrError
+                        }, "*");
+                    } else {
+                        frame.contentWindow.postMessage({
+                            req_id: reqId,
+                            status: "error",
+                            error: resultOrError != null ? String(resultOrError) : "gas_call failed"
+                        }, "*");
+                    }
+                } catch (postErr) {
+                    console.error("# host_frame_log : gas_call reply postMessage failed:", postErr);
+                }
+            }
+
+            /**
+             * ランチャー（opener）からの gas_call_result を処理する。
+             * @param {MessageEvent} event
+             * @returns {boolean} 処理したら true（Host 汎用ハンドラは return する）
+             */
+            function handleGasBridgeMessage(event) {
+                // ランチャーは opener。それ以外は対象外
+                if (!window.opener || event.source !== window.opener) {
+                    return false;
+                }
+                const data = event.data;
+                if (!data || typeof data !== "object") {
+                    return false;
+                }
+                if (data.channel !== GAS_BRIDGE_CHANNEL || data.v !== GAS_BRIDGE_VERSION) {
+                    return false;
+                }
+                if (data.type !== "gas_call_result") {
+                    return false;
+                }
+
+                const reqId = data.req_id;
+                if (!reqId || typeof reqId !== "string") {
+                    console.warn("# host_frame_log : gas_call_result without req_id");
+                    return true;
+                }
+
+                if (data.ok === true) {
+                    // GAS 戻り値はそのまま IDE → Python の await 結果になる
+                    replyGasCallToIde(reqId, "success", data.result);
+                } else {
+                    const errMsg = (data.error != null && data.error !== "")
+                        ? String(data.error)
+                        : "GAS function failed";
+                    replyGasCallToIde(reqId, "error", errMsg);
+                }
+                return true;
+            }
+
+            /**
+             * IDE からの gas_call をバリデートし、opener へ非同期依頼する。
+             * 戻り値は opener 応答またはタイムアウトで IDE に返す（本関数は待たない）。
+             * @param {object} data IDE postMessage ペイロード
+             */
+            function handleGasCallFromIde(data) {
+                const reqId = data && data.req_id;
+                if (!reqId || typeof reqId !== "string") {
+                    console.warn("# host_frame_log : gas_call missing req_id");
+                    return;
+                }
+
+                // 二重登録防止
+                if (pendingGasCallTimers.has(reqId)) {
+                    console.warn("# host_frame_log : gas_call duplicate req_id:", reqId);
+                    return;
+                }
+
+                const obj = (data && data.obj && typeof data.obj === "object") ? data.obj : {};
+                const funcName = obj.funcName;
+                const args = Array.isArray(data.args) ? data.args : null;
+
+                /**
+                 * pending 登録前の即時エラー（IDE の Promise を reject させる）
+                 * @param {string} message
+                 */
+                function failBeforePending(message) {
+                    try {
+                        if (frame && frame.contentWindow) {
+                            frame.contentWindow.postMessage({
+                                req_id: reqId,
+                                status: "error",
+                                error: message
+                            }, "*");
+                        }
+                    } catch (e) { /* ignore */ }
+                }
+
+                if (typeof funcName !== "string" || !GAS_FUNC_NAME_RE.test(funcName)) {
+                    failBeforePending("Invalid gas_call funcName (identifier required)");
+                    return;
+                }
+
+                if (args === null) {
+                    failBeforePending("gas_call args must be an array");
+                    return;
+                }
+
+                // ペイロードサイズ（概算）
+                let payloadChars = 0;
+                try {
+                    payloadChars = JSON.stringify({ funcName: funcName, args: args }).length;
+                } catch (serErr) {
+                    failBeforePending(
+                        "gas_call args are not JSON-serializable: " +
+                        String(serErr && serErr.message ? serErr.message : serErr)
+                    );
+                    return;
+                }
+                if (payloadChars > GAS_CALL_MAX_PAYLOAD_CHARS) {
+                    failBeforePending("gas_call payload too large");
+                    return;
+                }
+
+                // ランチャー未接続（通常 https ホストや opener 閉鎖）
+                let openerWin = null;
+                try {
+                    openerWin = window.opener;
+                } catch (e) {
+                    openerWin = null;
+                }
+                if (!openerWin || openerWin.closed) {
+                    failBeforePending("GAS launcher not available (window.opener missing or closed)");
+                    return;
+                }
+
+                // タイムアウト付きで pending 登録（この後の replyGasCallToIde が有効になる）
+                const timerId = setTimeout(() => {
+                    replyGasCallToIde(
+                        reqId,
+                        "error",
+                        "gas_call timeout (" + GAS_CALL_TIMEOUT_MS + "ms)"
+                    );
+                }, GAS_CALL_TIMEOUT_MS);
+                pendingGasCallTimers.set(reqId, { timerId: timerId, funcName: funcName });
+
+                const outbound = {
+                    channel: GAS_BRIDGE_CHANNEL,
+                    v: GAS_BRIDGE_VERSION,
+                    type: "gas_call",
+                    req_id: reqId,
+                    funcName: funcName,
+                    args: args
+                };
+
+                try {
+                    openerWin.postMessage(outbound, "*");
+                    console.log("# host_frame_log : gas_call forwarded to opener:", funcName, reqId);
+                } catch (postErr) {
+                    replyGasCallToIde(
+                        reqId,
+                        "error",
+                        "Failed to postMessage GAS launcher: " + String(postErr && postErr.message || postErr)
+                    );
+                }
+            }
+
+            console.log("# host_frame_log : gas_bridge ready (opener=", !!(function () {
+                try { return window.opener && !window.opener.closed; } catch (e) { return false; }
+            })(), ")");
 
         })();
 
