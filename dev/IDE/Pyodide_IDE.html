@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pyodide_IDE(v1.12.039)</title>
+    <title>Pyodide_IDE(v1.12.040)</title>
     <link rel="icon" type="image/png" href="favicon.png">
 
     <meta http-equiv="Content-Security-Policy" content="
@@ -2793,6 +2793,44 @@ await main_async_def()
                     });
                 }
 
+                //-------------------------------------------------------- ### Agent フェーズ A（API 専用操作）
+                else if (data.cmd === "agent_workspace_snapshot") {
+                    handle_agent_workspace_snapshot();
+                }
+                else if (data.cmd === "agent_script_tree") {
+                    handle_agent_script_tree_request({
+                        maxDepth: data.maxDepth
+                    });
+                }
+                else if (data.cmd === "agent_repo_search") {
+                    handle_agent_repo_search({
+                        query: data.query,
+                        scope: data.scope,
+                        glob: data.glob,
+                        maxHits: data.maxHits,
+                        context: data.context
+                    });
+                }
+                else if (data.cmd === "agent_file_read") {
+                    handle_agent_file_read({
+                        path: data.path,
+                        startLine: data.startLine,
+                        endLine: data.endLine,
+                        maxChars: data.maxChars
+                    });
+                }
+                else if (data.cmd === "agent_code_replace") {
+                    handle_agent_code_replace({
+                        path: data.path,
+                        oldString: data.oldString,
+                        newString: data.newString,
+                        replaceAll: data.replaceAll
+                    });
+                }
+                else if (data.cmd === "agent_run_current") {
+                    handle_agent_run_current();
+                }
+
                 return; // host_frameからのメッセージ処理終了
             }
 
@@ -5510,6 +5548,1077 @@ setup_web_serial();
             }
         }
 
+        //-------------------------------------------------------- ### Agent フェーズ A（API 専用・観察 / 検索 / 読取 / 部分置換）
+        // Python は実行しない。VFS は /mnt/vfs_root サンドボックス。GitHub 本文は Host 側。
+
+        const AGENT_READ_MAX_CHARS_DEFAULT = 20000;
+        const AGENT_READ_MAX_CHARS_CAP = 40000;
+        const AGENT_SEARCH_MAX_HITS_DEFAULT = 30;
+        const AGENT_SEARCH_MAX_HITS_CAP = 50;
+        const AGENT_SEARCH_CONTEXT_DEFAULT = 2;
+        const AGENT_SEARCH_CONTEXT_CAP = 5;
+        const AGENT_SEARCH_FILE_MAX_BYTES = 256 * 1024;
+        const AGENT_SEARCH_MAX_FILES = 200;
+
+        /** Agent 操作用の結果を Host へ返す */
+        function post_agent_op_result(cmd, obj) {
+            js_post_message(cmd, "host", "*", obj || {}, []);
+        }
+
+        /** maxDepth を vfs_tree と同じ規則でクランプ */
+        function clamp_agent_max_depth(raw) {
+            let maxDepth = Number(raw);
+            if (!Number.isFinite(maxDepth)) maxDepth = 8;
+            return Math.max(0, Math.min(20, Math.floor(maxDepth)));
+        }
+
+        /** 読取文字数上限 */
+        function clamp_agent_max_chars(raw) {
+            let maxChars = Number(raw);
+            if (!Number.isFinite(maxChars)) maxChars = AGENT_READ_MAX_CHARS_DEFAULT;
+            return Math.max(1, Math.min(AGENT_READ_MAX_CHARS_CAP, Math.floor(maxChars)));
+        }
+
+        /**
+         * エージェント用パスを層に分解する
+         * @returns {{ ok: boolean, kind?: string, spec?: string, error?: string }}
+         */
+        function parse_agent_workspace_path(rawPath) {
+            let raw = (rawPath == null || String(rawPath).trim() === "")
+                ? "active"
+                : String(rawPath).trim();
+
+            if (raw === "active" || raw === "tab") {
+                return { ok: true, kind: "tab", spec: "active" };
+            }
+
+            const colon = raw.indexOf(":");
+            if (colon > 0) {
+                const prefix = raw.slice(0, colon).toLowerCase();
+                const rest = raw.slice(colon + 1);
+                if (prefix === "tab") {
+                    const name = String(rest || "").trim();
+                    return { ok: true, kind: "tab", spec: name || "active" };
+                }
+                if (prefix === "script") {
+                    const rel = normalize_script_relative_path(rest);
+                    if (!rel) {
+                        return { ok: false, error: "Invalid script path" };
+                    }
+                    return { ok: true, kind: "script", spec: rel };
+                }
+                if (prefix === "vfs") {
+                    return { ok: true, kind: "vfs", spec: rest };
+                }
+                if (prefix === "github") {
+                    return { ok: true, kind: "github", spec: rest };
+                }
+            }
+
+            // /mnt/vfs_root 配下は VFS
+            if (raw === MOUNT_PATH || raw.indexOf(MOUNT_PATH + "/") === 0) {
+                return { ok: true, kind: "vfs", spec: raw };
+            }
+
+            // プレフィックス無しは Script 相対パス（読取時は同名タブを優先）
+            const rel = normalize_script_relative_path(raw);
+            if (rel) {
+                return { ok: true, kind: "script", spec: rel, unprefixed: true };
+            }
+            return { ok: false, error: "Unrecognized path: " + raw };
+        }
+
+        /** 拡張子から言語ヒント */
+        function guess_agent_language_from_name(fileName) {
+            const n = String(fileName || "").toLowerCase();
+            if (n.endsWith(".py")) return "python";
+            if (n.endsWith(".js")) return "javascript";
+            if (n.endsWith(".json")) return "json";
+            if (n.endsWith(".html") || n.endsWith(".htm")) return "html";
+            if (n.endsWith(".css")) return "css";
+            if (n.endsWith(".csv")) return "csv";
+            if (n.endsWith(".md")) return "markdown";
+            if (n.endsWith(".txt")) return "text";
+            return "text";
+        }
+
+        /** 先頭バイトからバイナリっぽいか判定 */
+        function looks_like_binary_bytes(uint8) {
+            if (!uint8 || !uint8.length) return false;
+            const n = Math.min(uint8.length, 8000);
+            let ctrl = 0;
+            for (let i = 0; i < n; i++) {
+                const b = uint8[i];
+                if (b === 0) return true;
+                if (b < 9 || (b > 13 && b < 32)) ctrl++;
+            }
+            return (ctrl / n) > 0.10;
+        }
+
+        /** 行範囲と文字数で本文を切り出す */
+        function slice_agent_file_content(fullText, startLineRaw, endLineRaw, maxCharsRaw) {
+            const text = (fullText == null) ? "" : String(fullText);
+            const lines = text.split("\n");
+            const total = lines.length;
+            let startLine = Number(startLineRaw);
+            let endLine = Number(endLineRaw);
+            if (!Number.isFinite(startLine) || startLine < 1) startLine = 1;
+            if (!Number.isFinite(endLine) || endLine < startLine) endLine = total;
+            if (total === 0) {
+                return {
+                    content: "",
+                    lineCount: 0,
+                    startLine: 1,
+                    endLine: 0,
+                    truncated: false
+                };
+            }
+            startLine = Math.min(startLine, total);
+            endLine = Math.min(endLine, total);
+            const maxChars = clamp_agent_max_chars(maxCharsRaw);
+            let content = lines.slice(startLine - 1, endLine).join("\n");
+            let truncated = (startLine > 1) || (endLine < total);
+            if (content.length > maxChars) {
+                content = content.slice(0, maxChars);
+                truncated = true;
+            }
+            return {
+                content: content,
+                lineCount: total,
+                startLine: startLine,
+                endLine: endLine,
+                truncated: truncated
+            };
+        }
+
+        /** タブ本文を取得（spreadsheet は CSV 化） */
+        function get_tab_text_content(tabId, tab) {
+            if (!tab) {
+                return { ok: false, error: "Tab not found" };
+            }
+            if (tab.type === "preview" || tab.type === "plot") {
+                return { ok: false, error: "Tab type is not readable: " + tab.type };
+            }
+            if (tab.type === "spreadsheet") {
+                if (!spreadsheet_instances[tabId]) {
+                    const raw = (typeof tab.content === "string") ? tab.content : "";
+                    return {
+                        ok: true,
+                        text: raw,
+                        language: "csv",
+                        type: tab.type
+                    };
+                }
+                const sheetData = spreadsheet_instances[tabId].getData();
+                const csv = sheetData.map(function (row) {
+                    return row.join(",");
+                }).join("\n");
+                return { ok: true, text: csv, language: "csv", type: tab.type };
+            }
+            if (tab.model && typeof tab.model.getValue === "function") {
+                const text = tab.model.getValue();
+                let language = "text";
+                if (typeof tab.model.getLanguageId === "function") {
+                    language = tab.model.getLanguageId();
+                }
+                return { ok: true, text: text, language: language, type: tab.type };
+            }
+            return { ok: false, error: "Tab has no editor model" };
+        }
+
+        /** 名前または active でタブを探す */
+        function find_tab_entry_by_spec(spec) {
+            if (!spec || spec === "active") {
+                if (!active_tab_id || !tabs_data[active_tab_id]) {
+                    return { ok: false, error: "No active tab" };
+                }
+                return { ok: true, id: active_tab_id, tab: tabs_data[active_tab_id] };
+            }
+            for (const id in tabs_data) {
+                if (tabs_data[id] && tabs_data[id].name === spec) {
+                    return { ok: true, id: id, tab: tabs_data[id] };
+                }
+            }
+            return { ok: false, error: "Tab not found: " + spec };
+        }
+
+        /** scriptPath が一致する開いているタブ */
+        function find_tab_entry_by_script_path(scriptPath) {
+            if (!scriptPath) return null;
+            const norm = normalize_script_relative_path(scriptPath);
+            if (!norm) return null;
+            for (const id in tabs_data) {
+                const tab = tabs_data[id];
+                if (tab && tab.scriptPath && normalize_script_relative_path(tab.scriptPath) === norm) {
+                    return { id: id, tab: tab };
+                }
+            }
+            return null;
+        }
+
+        /** Script ノードからテキストを読む（File / FileSystemFileHandle） */
+        async function read_script_node_text(node) {
+            if (!node || node.type !== "file") {
+                return { ok: false, error: "Not a file node" };
+            }
+            const handle = node.handle;
+            if (!handle) {
+                return { ok: false, error: "File handle is empty" };
+            }
+            try {
+                if (typeof handle.size === "number" && handle.size > AGENT_SEARCH_FILE_MAX_BYTES) {
+                    return { ok: false, error: "File too large", skipped: true };
+                }
+                if (typeof handle.text === "function") {
+                    const text = await handle.text();
+                    return { ok: true, text: text };
+                }
+                if (typeof handle.getFile === "function") {
+                    const file = await handle.getFile();
+                    if (file && typeof file.size === "number" && file.size > AGENT_SEARCH_FILE_MAX_BYTES) {
+                        return { ok: false, error: "File too large", skipped: true };
+                    }
+                    const text = await file.text();
+                    return { ok: true, text: text };
+                }
+            } catch (err) {
+                return { ok: false, error: String(err && err.message ? err.message : err) };
+            }
+            return { ok: false, error: "Cannot read file handle" };
+        }
+
+        /** VFS ファイルを JS 側で読む（Python 非実行） */
+        function read_vfs_file_text(requestPath) {
+            if (!pyodide_js || !pyodide_js.FS) {
+                return { ok: false, error: "Pyodide is not ready" };
+            }
+            const resolved = resolve_agent_vfs_path(requestPath);
+            if (!resolved.ok) {
+                return resolved;
+            }
+            let pathStat;
+            try {
+                pathStat = pyodide_js.FS.stat(resolved.path);
+            } catch (e) {
+                return { ok: false, error: "Path not found: " + resolved.path };
+            }
+            if (pyodide_js.FS.isDir(pathStat.mode)) {
+                return { ok: false, error: "Path is a directory: " + resolved.path };
+            }
+            if (typeof pathStat.size === "number" && pathStat.size > AGENT_SEARCH_FILE_MAX_BYTES) {
+                return { ok: false, error: "File too large", skipped: true, path: resolved.path };
+            }
+            let data;
+            try {
+                data = pyodide_js.FS.readFile(resolved.path);
+            } catch (e) {
+                return { ok: false, error: String(e && e.message ? e.message : e) };
+            }
+            if (looks_like_binary_bytes(data)) {
+                return { ok: false, error: "Binary file skipped", skipped: true, path: resolved.path };
+            }
+            const text = decode_auto(data);
+            return { ok: true, path: resolved.path, text: text };
+        }
+
+        /** アクティブタブの構文エラー要約（Monaco markers） */
+        function get_active_syntax_summary() {
+            const empty = { errorCount: 0, errors: [] };
+            if (!editor || typeof monaco === "undefined" || !monaco.editor) {
+                return empty;
+            }
+            const model = editor.getModel();
+            if (!model) return empty;
+            let markers = [];
+            try {
+                markers = monaco.editor.getModelMarkers({ resource: model.uri });
+            } catch (e) {
+                return empty;
+            }
+            const errors = [];
+            for (let i = 0; i < markers.length; i++) {
+                const m = markers[i];
+                if (m.severity === monaco.MarkerSeverity.Error) {
+                    errors.push({
+                        line: m.startLineNumber,
+                        message: m.message
+                    });
+                }
+            }
+            return {
+                errorCount: errors.length,
+                errors: errors.slice(0, 10)
+            };
+        }
+
+        /** Script ツリーのファイル / フォルダ数 */
+        function count_script_tree_nodes(nodes) {
+            return count_vfs_tree_nodes(nodes || []);
+        }
+
+        /**
+         * Script ノードを深さ制限付きでコピー（tree テキスト用）
+         */
+        function script_nodes_to_limited_tree(nodes, maxDepth, depth, truncState) {
+            const tree = [];
+            if (!Array.isArray(nodes)) return tree;
+            if (depth >= maxDepth) {
+                if (nodes.length > 0) truncState.truncated = true;
+                return tree;
+            }
+            for (let i = 0; i < nodes.length; i++) {
+                const node = nodes[i];
+                if (!node || !node.name) continue;
+                const item = {
+                    name: node.name,
+                    type: node.type === "folder" ? "folder" : "file"
+                };
+                if (item.type === "folder") {
+                    item.children = script_nodes_to_limited_tree(
+                        node.children || [],
+                        maxDepth,
+                        depth + 1,
+                        truncState
+                    );
+                }
+                tree.push(item);
+            }
+            return tree;
+        }
+
+        /** VFS の浅い件数（snapshot 用。走査は既存 limited tree） */
+        function summarize_vfs_for_snapshot() {
+            const summary = {
+                path: MOUNT_PATH,
+                fileCount: 0,
+                dirCount: 0,
+                truncated: false
+            };
+            if (!pyodide_js || !pyodide_js.FS) {
+                summary.error = "Pyodide is not ready";
+                return summary;
+            }
+            try {
+                const truncState = { truncated: false };
+                const children = create_tree_from_vfs_limited(MOUNT_PATH, 8, 0, truncState);
+                const counts = count_vfs_tree_nodes(children);
+                summary.fileCount = counts.fileCount;
+                summary.dirCount = counts.dirCount;
+                summary.truncated = truncState.truncated;
+            } catch (err) {
+                summary.error = String(err && err.message ? err.message : err);
+            }
+            return summary;
+        }
+
+        /** ワークスペース地図（本文なし） */
+        function handle_agent_workspace_snapshot() {
+            try {
+                const openTabs = [];
+                let activeTab = null;
+                for (const id in tabs_data) {
+                    const tab = tabs_data[id];
+                    if (!tab) continue;
+                    const got = get_tab_text_content(id, tab);
+                    const lineCount = got.ok ? String(got.text).split("\n").length : 0;
+                    const info = {
+                        name: tab.name,
+                        type: tab.type,
+                        language: got.ok ? got.language : guess_agent_language_from_name(tab.name),
+                        lineCount: lineCount
+                    };
+                    openTabs.push(info);
+                    if (id === active_tab_id) {
+                        activeTab = {
+                            name: tab.name,
+                            type: tab.type,
+                            language: info.language,
+                            lineCount: lineCount,
+                            scriptPath: tab.scriptPath || null,
+                            githubPath: tab.githubPath || null
+                        };
+                    }
+                }
+
+                if (scriptExplorerState.tree && Array.isArray(scriptExplorerState.tree)) {
+                    ensure_script_paths(scriptExplorerState.tree, "");
+                }
+                const scriptCounts = count_script_tree_nodes(
+                    (scriptExplorerState.tree && Array.isArray(scriptExplorerState.tree))
+                        ? scriptExplorerState.tree
+                        : []
+                );
+
+                let githubInfo = { connected: false };
+                if (githubExplorerActive && githubRepoContext) {
+                    githubInfo = {
+                        connected: true,
+                        owner: githubRepoContext.owner,
+                        repo: githubRepoContext.repo,
+                        branch: githubRepoContext.branch || "main"
+                    };
+                }
+
+                post_agent_op_result("workspace_snapshot_result", {
+                    activeTab: activeTab,
+                    openTabs: openTabs,
+                    scriptExplorer: {
+                        type: scriptExplorerState.type || null,
+                        fileCount: scriptCounts.fileCount,
+                        dirCount: scriptCounts.dirCount
+                    },
+                    vfs: summarize_vfs_for_snapshot(),
+                    github: githubInfo,
+                    syntax: get_active_syntax_summary()
+                });
+            } catch (err) {
+                post_agent_op_result("workspace_snapshot_result", {
+                    error: String(err && err.message ? err.message : err)
+                });
+            }
+        }
+
+        /** Script_Explorer の tree 風テキスト */
+        function handle_agent_script_tree_request(options) {
+            const opts = options || {};
+            const maxDepth = clamp_agent_max_depth(opts.maxDepth);
+            try {
+                const type = scriptExplorerState.type || null;
+                const nodes = (scriptExplorerState.tree && Array.isArray(scriptExplorerState.tree))
+                    ? scriptExplorerState.tree
+                    : [];
+                if (!type || nodes.length === 0) {
+                    post_agent_op_result("script_tree_result", {
+                        type: type,
+                        tree: "(empty)",
+                        fileCount: 0,
+                        dirCount: 0,
+                        truncated: false,
+                        maxDepth: maxDepth
+                    });
+                    return;
+                }
+                if (type === "local_upload" || type === "local") {
+                    ensure_script_paths(nodes, "");
+                }
+                const truncState = { truncated: false };
+                const limited = script_nodes_to_limited_tree(nodes, maxDepth, 0, truncState);
+                const counts = count_script_tree_nodes(limited);
+                const rootLabel = type === "github" && githubRepoContext
+                    ? (githubRepoContext.owner + "/" + githubRepoContext.repo)
+                    : ("script:" + type);
+                let treeText = format_vfs_tree_text(rootLabel, limited);
+                if (truncState.truncated) {
+                    treeText += "\n… (truncated by maxDepth)";
+                }
+                post_agent_op_result("script_tree_result", {
+                    type: type,
+                    tree: treeText,
+                    fileCount: counts.fileCount,
+                    dirCount: counts.dirCount,
+                    truncated: truncState.truncated,
+                    maxDepth: maxDepth
+                });
+            } catch (err) {
+                post_agent_op_result("script_tree_result", {
+                    error: String(err && err.message ? err.message : err),
+                    maxDepth: maxDepth
+                });
+            }
+        }
+
+        /** glob を正規表現へ（* / ** / ?） */
+        function agent_glob_to_regex(glob) {
+            if (glob == null || String(glob).trim() === "") return null;
+            const s = String(glob);
+            let out = "^";
+            for (let i = 0; i < s.length; i++) {
+                const c = s[i];
+                if (c === "*") {
+                    if (s[i + 1] === "*") {
+                        out += ".*";
+                        i++;
+                        if (s[i + 1] === "/") i++;
+                    } else {
+                        out += "[^/]*";
+                    }
+                } else if (c === "?") {
+                    out += "[^/]";
+                } else if ("\\^$+{}[]()|.".indexOf(c) !== -1) {
+                    out += "\\" + c;
+                } else {
+                    out += c;
+                }
+            }
+            out += "$";
+            try {
+                return new RegExp(out, "i");
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function agent_path_matches_glob(filePath, globRe) {
+            if (!globRe) return true;
+            const name = String(filePath || "").split("/").pop();
+            return globRe.test(filePath) || globRe.test(name);
+        }
+
+        /** query を正規表現化。不正ならリテラル */
+        function compile_agent_search_regex(query) {
+            const q = String(query == null ? "" : query);
+            if (!q) {
+                return { ok: false, error: "query is empty" };
+            }
+            try {
+                return { ok: true, re: new RegExp(q, "g") };
+            } catch (e) {
+                const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                return { ok: true, re: new RegExp(escaped, "g") };
+            }
+        }
+
+        /**
+         * 1 ファイルを行単位で検索して hits に追加
+         * @returns {boolean} 上限到達で打ち切ったとき true
+         */
+        function search_text_into_hits(text, path, sourceRe, context, maxHits, hits) {
+            const lines = String(text == null ? "" : text).split("\n");
+            const flags = sourceRe.flags.replace("g", "");
+            const lineRe = new RegExp(sourceRe.source, flags);
+            for (let i = 0; i < lines.length; i++) {
+                if (hits.length >= maxHits) return true;
+                lineRe.lastIndex = 0;
+                if (!lineRe.test(lines[i])) continue;
+                const from = Math.max(0, i - context);
+                const to = Math.min(lines.length, i + 1 + context);
+                hits.push({
+                    path: path,
+                    line: i + 1,
+                    excerpt: lines.slice(from, to).join("\n")
+                });
+            }
+            return hits.length >= maxHits;
+        }
+
+        /** Script ツリーのファイルを再帰列挙 */
+        function collect_script_file_nodes(nodes, out) {
+            const acc = out || [];
+            if (!Array.isArray(nodes)) return acc;
+            for (let i = 0; i < nodes.length; i++) {
+                const node = nodes[i];
+                if (!node) continue;
+                if (node.type === "file") {
+                    acc.push(node);
+                } else if (node.type === "folder" && Array.isArray(node.children)) {
+                    collect_script_file_nodes(node.children, acc);
+                }
+            }
+            return acc;
+        }
+
+        /** リポジトリ検索（tabs / script / vfs。github 本文は対象外） */
+        function handle_agent_repo_search(options) {
+            handle_agent_repo_search_async(options).catch(function (err) {
+                post_agent_op_result("repo_search_result", {
+                    error: String(err && err.message ? err.message : err)
+                });
+            });
+        }
+
+        async function handle_agent_repo_search_async(options) {
+            const opts = options || {};
+            const compiled = compile_agent_search_regex(opts.query);
+            if (!compiled.ok) {
+                post_agent_op_result("repo_search_result", { error: compiled.error });
+                return;
+            }
+            let scope = String(opts.scope || "all").toLowerCase();
+            if (scope !== "script" && scope !== "vfs" && scope !== "tabs" && scope !== "all") {
+                scope = "all";
+            }
+            let maxHits = Number(opts.maxHits);
+            if (!Number.isFinite(maxHits)) maxHits = AGENT_SEARCH_MAX_HITS_DEFAULT;
+            maxHits = Math.max(1, Math.min(AGENT_SEARCH_MAX_HITS_CAP, Math.floor(maxHits)));
+            let context = Number(opts.context);
+            if (!Number.isFinite(context)) context = AGENT_SEARCH_CONTEXT_DEFAULT;
+            context = Math.max(0, Math.min(AGENT_SEARCH_CONTEXT_CAP, Math.floor(context)));
+            const globRe = agent_glob_to_regex(opts.glob);
+
+            const hits = [];
+            const skipped = [];
+            let truncated = false;
+            let filesScanned = 0;
+
+            const wantTabs = (scope === "all" || scope === "tabs");
+            const wantScript = (scope === "all" || scope === "script");
+            const wantVfs = (scope === "all" || scope === "vfs");
+
+            if (wantTabs) {
+                for (const id in tabs_data) {
+                    if (truncated) break;
+                    const tab = tabs_data[id];
+                    if (!tab) continue;
+                    const tabPath = "tab:" + tab.name;
+                    if (!agent_path_matches_glob(tab.name, globRe)) continue;
+                    filesScanned++;
+                    const got = get_tab_text_content(id, tab);
+                    if (!got.ok) {
+                        skipped.push({ path: tabPath, reason: got.error });
+                        continue;
+                    }
+                    if (search_text_into_hits(got.text, tabPath, compiled.re, context, maxHits, hits)) {
+                        truncated = true;
+                    }
+                }
+            }
+
+            if (wantScript && !truncated) {
+                const treeType = scriptExplorerState.type;
+                if (treeType === "github") {
+                    skipped.push({
+                        path: "script:",
+                        reason: "GitHub file bodies are not searched. Use file_read with github: path"
+                    });
+                } else if (treeType && Array.isArray(scriptExplorerState.tree)) {
+                    ensure_script_paths(scriptExplorerState.tree, "");
+                    const files = collect_script_file_nodes(scriptExplorerState.tree, []);
+                    for (let i = 0; i < files.length; i++) {
+                        if (truncated) break;
+                        const node = files[i];
+                        const rel = node.script_path || node.name;
+                        if (!agent_path_matches_glob(rel, globRe)) continue;
+                        filesScanned++;
+                        if (filesScanned > AGENT_SEARCH_MAX_FILES) {
+                            truncated = true;
+                            break;
+                        }
+                        const read = await read_script_node_text(node);
+                        const pathLabel = "script:" + rel;
+                        if (!read.ok) {
+                            skipped.push({ path: pathLabel, reason: read.error });
+                            continue;
+                        }
+                        if (search_text_into_hits(read.text, pathLabel, compiled.re, context, maxHits, hits)) {
+                            truncated = true;
+                        }
+                    }
+                }
+            }
+
+            if (wantVfs && !truncated && pyodide_js && pyodide_js.FS) {
+                function walkVfs(dir) {
+                    if (truncated) return;
+                    let entries;
+                    try {
+                        entries = pyodide_js.FS.readdir(dir);
+                    } catch (e) {
+                        return;
+                    }
+                    for (let i = 0; i < entries.length; i++) {
+                        if (truncated) return;
+                        const entry = entries[i];
+                        if (entry === "." || entry === "..") continue;
+                        const full = dir + "/" + entry;
+                        let st;
+                        try {
+                            st = pyodide_js.FS.stat(full);
+                        } catch (e) {
+                            continue;
+                        }
+                        if (pyodide_js.FS.isDir(st.mode)) {
+                            walkVfs(full);
+                            continue;
+                        }
+                        if (!agent_path_matches_glob(full, globRe) && !agent_path_matches_glob(entry, globRe)) {
+                            continue;
+                        }
+                        filesScanned++;
+                        if (filesScanned > AGENT_SEARCH_MAX_FILES) {
+                            truncated = true;
+                            return;
+                        }
+                        const read = read_vfs_file_text(full);
+                        const pathLabel = "vfs:" + full;
+                        if (!read.ok) {
+                            skipped.push({ path: pathLabel, reason: read.error });
+                            continue;
+                        }
+                        if (search_text_into_hits(read.text, pathLabel, compiled.re, context, maxHits, hits)) {
+                            truncated = true;
+                        }
+                    }
+                }
+                walkVfs(MOUNT_PATH);
+            }
+
+            post_agent_op_result("repo_search_result", {
+                query: String(opts.query || ""),
+                scope: scope,
+                hitCount: hits.length,
+                hits: hits,
+                skipped: skipped.slice(0, 20),
+                truncated: truncated
+            });
+        }
+
+        /** ファイル読取 */
+        function handle_agent_file_read(options) {
+            handle_agent_file_read_async(options).catch(function (err) {
+                post_agent_op_result("file_read_result", {
+                    error: String(err && err.message ? err.message : err)
+                });
+            });
+        }
+
+        async function handle_agent_file_read_async(options) {
+            const opts = options || {};
+            const parsed = parse_agent_workspace_path(opts.path);
+            if (!parsed.ok) {
+                post_agent_op_result("file_read_result", { error: parsed.error });
+                return;
+            }
+            if (parsed.kind === "github") {
+                post_agent_op_result("file_read_result", {
+                    error: "GitHub reads are handled by Host. Retry with github: path"
+                });
+                return;
+            }
+
+            // プレフィックス無しで同名タブがあればタブを優先
+            if (parsed.unprefixed === true) {
+                const tabHit = find_tab_entry_by_spec(parsed.spec);
+                if (tabHit.ok) {
+                    parsed.kind = "tab";
+                    parsed.spec = parsed.spec;
+                }
+            }
+
+            let displayPath = "";
+            let language = "text";
+            let text = "";
+
+            if (parsed.kind === "tab") {
+                const found = find_tab_entry_by_spec(parsed.spec);
+                if (!found.ok) {
+                    post_agent_op_result("file_read_result", { error: found.error });
+                    return;
+                }
+                const got = get_tab_text_content(found.id, found.tab);
+                if (!got.ok) {
+                    post_agent_op_result("file_read_result", { error: got.error });
+                    return;
+                }
+                displayPath = "tab:" + found.tab.name;
+                language = got.language;
+                text = got.text;
+            } else if (parsed.kind === "script") {
+                if (!scriptExplorerState.tree || !Array.isArray(scriptExplorerState.tree)) {
+                    post_agent_op_result("file_read_result", { error: "Script_Explorer is empty" });
+                    return;
+                }
+                if (scriptExplorerState.type === "local_upload" || scriptExplorerState.type === "local") {
+                    ensure_script_paths(scriptExplorerState.tree, "");
+                }
+                if (scriptExplorerState.type === "github") {
+                    post_agent_op_result("file_read_result", {
+                        error: "Use github:" + parsed.spec + " to read remote files"
+                    });
+                    return;
+                }
+                const node = find_script_node_by_path(scriptExplorerState.tree, parsed.spec);
+                if (!node || node.type !== "file") {
+                    post_agent_op_result("file_read_result", {
+                        error: "Script file not found: " + parsed.spec
+                    });
+                    return;
+                }
+                const read = await read_script_node_text(node);
+                if (!read.ok) {
+                    post_agent_op_result("file_read_result", { error: read.error, path: "script:" + parsed.spec });
+                    return;
+                }
+                displayPath = "script:" + parsed.spec;
+                language = guess_agent_language_from_name(node.name);
+                text = read.text;
+            } else if (parsed.kind === "vfs") {
+                const read = read_vfs_file_text(parsed.spec);
+                if (!read.ok) {
+                    post_agent_op_result("file_read_result", { error: read.error, path: parsed.spec });
+                    return;
+                }
+                displayPath = "vfs:" + read.path;
+                language = guess_agent_language_from_name(read.path);
+                text = read.text;
+            } else {
+                post_agent_op_result("file_read_result", { error: "Unsupported path kind" });
+                return;
+            }
+
+            const sliced = slice_agent_file_content(
+                text,
+                opts.startLine,
+                opts.endLine,
+                opts.maxChars
+            );
+            post_agent_op_result("file_read_result", {
+                path: displayPath,
+                language: language,
+                lineCount: sliced.lineCount,
+                startLine: sliced.startLine,
+                endLine: sliced.endLine,
+                content: sliced.content,
+                truncated: sliced.truncated
+            });
+        }
+
+        /**
+         * 完全一致置換。0 件 / 複数件（replaceAll なし）は実行しない
+         */
+        function apply_exact_replace(text, oldString, newString, replaceAll) {
+            if (oldString == null || String(oldString) === "") {
+                return { ok: false, error: "oldString is empty" };
+            }
+            const oldS = String(oldString);
+            const newS = (newString == null) ? "" : String(newString);
+            let count = 0;
+            let from = 0;
+            while (from <= text.length) {
+                const found = text.indexOf(oldS, from);
+                if (found === -1) break;
+                count++;
+                from = found + Math.max(oldS.length, 1);
+                if (oldS.length === 0) break;
+            }
+            if (count === 0) {
+                return {
+                    ok: false,
+                    error: "oldString not found. Re-read the file and use an exact snippet."
+                };
+            }
+            if (count > 1 && !replaceAll) {
+                return {
+                    ok: false,
+                    error: "oldString matched " + count + " times. Add surrounding lines to make it unique, or set replaceAll true."
+                };
+            }
+            let next;
+            if (replaceAll) {
+                next = text.split(oldS).join(newS);
+            } else {
+                const pos = text.indexOf(oldS);
+                next = text.slice(0, pos) + newS + text.slice(pos + oldS.length);
+            }
+            return {
+                ok: true,
+                text: next,
+                replacements: replaceAll ? count : 1
+            };
+        }
+
+        /** local_upload ノードへ本文を書き戻す */
+        function write_script_local_upload_node(node, content) {
+            if (scriptExplorerState.type !== "local_upload") {
+                return { ok: false, error: "Write allowed only for script local_upload (not github / local)" };
+            }
+            const baseName = node.name;
+            node.handle = new File([content], baseName, { type: "text/plain" });
+            set_script_explorer_tree("local_upload", scriptExplorerState.tree);
+            return { ok: true };
+        }
+
+        /** 開いているタブのモデルを更新して解析 */
+        function apply_text_to_editor_tab(tabId, tab, content) {
+            if (!tab || tab.type !== "editor" || !tab.model) {
+                return { ok: false, error: "Target tab is not an editor" };
+            }
+            tab.model.setValue(content);
+            if (tabId === active_tab_id && editor) {
+                analyze_python_code(content);
+            }
+            return { ok: true };
+        }
+
+        /** 部分差し替え */
+        function handle_agent_code_replace(options) {
+            handle_agent_code_replace_async(options).catch(function (err) {
+                post_agent_op_result("code_replace_result", {
+                    error: String(err && err.message ? err.message : err)
+                });
+            });
+        }
+
+        async function handle_agent_code_replace_async(options) {
+            const opts = options || {};
+            const parsed = parse_agent_workspace_path(opts.path);
+            if (!parsed.ok) {
+                post_agent_op_result("code_replace_result", { error: parsed.error });
+                return;
+            }
+            if (parsed.kind === "github") {
+                post_agent_op_result("code_replace_result", {
+                    error: "GitHub paths are read-only"
+                });
+                return;
+            }
+
+            if (parsed.unprefixed === true) {
+                const tabHit = find_tab_entry_by_spec(parsed.spec);
+                if (tabHit.ok) {
+                    parsed.kind = "tab";
+                }
+            }
+
+            let displayPath = "";
+            let original = "";
+            let writeKind = parsed.kind;
+            let tabRef = null;
+            let scriptNode = null;
+            let vfsPath = null;
+
+            if (parsed.kind === "tab") {
+                const found = find_tab_entry_by_spec(parsed.spec);
+                if (!found.ok) {
+                    post_agent_op_result("code_replace_result", { error: found.error });
+                    return;
+                }
+                if (found.tab.type !== "editor") {
+                    post_agent_op_result("code_replace_result", {
+                        error: "code_replace supports editor tabs only"
+                    });
+                    return;
+                }
+                const got = get_tab_text_content(found.id, found.tab);
+                if (!got.ok) {
+                    post_agent_op_result("code_replace_result", { error: got.error });
+                    return;
+                }
+                displayPath = "tab:" + found.tab.name;
+                original = got.text;
+                tabRef = found;
+            } else if (parsed.kind === "script") {
+                if (!scriptExplorerState.tree || !Array.isArray(scriptExplorerState.tree)) {
+                    post_agent_op_result("code_replace_result", { error: "Script_Explorer is empty" });
+                    return;
+                }
+                if (scriptExplorerState.type !== "local_upload") {
+                    post_agent_op_result("code_replace_result", {
+                        error: "Write allowed only for script local_upload"
+                    });
+                    return;
+                }
+                ensure_script_paths(scriptExplorerState.tree, "");
+                const node = find_script_node_by_path(scriptExplorerState.tree, parsed.spec);
+                if (!node || node.type !== "file") {
+                    post_agent_op_result("code_replace_result", {
+                        error: "Script file not found: " + parsed.spec
+                    });
+                    return;
+                }
+                const openTab = find_tab_entry_by_script_path(parsed.spec);
+                if (openTab) {
+                    const got = get_tab_text_content(openTab.id, openTab.tab);
+                    if (!got.ok) {
+                        post_agent_op_result("code_replace_result", { error: got.error });
+                        return;
+                    }
+                    original = got.text;
+                    tabRef = openTab;
+                } else {
+                    const read = await read_script_node_text(node);
+                    if (!read.ok) {
+                        post_agent_op_result("code_replace_result", { error: read.error });
+                        return;
+                    }
+                    original = read.text;
+                }
+                displayPath = "script:" + parsed.spec;
+                scriptNode = node;
+            } else if (parsed.kind === "vfs") {
+                const read = read_vfs_file_text(parsed.spec);
+                if (!read.ok) {
+                    post_agent_op_result("code_replace_result", { error: read.error });
+                    return;
+                }
+                displayPath = "vfs:" + read.path;
+                original = read.text;
+                vfsPath = read.path;
+            }
+
+            const replaced = apply_exact_replace(
+                original,
+                opts.oldString,
+                opts.newString,
+                opts.replaceAll === true
+            );
+            if (!replaced.ok) {
+                post_agent_op_result("code_replace_result", {
+                    error: replaced.error,
+                    path: displayPath
+                });
+                return;
+            }
+
+            if (writeKind === "tab" && tabRef) {
+                const applied = apply_text_to_editor_tab(tabRef.id, tabRef.tab, replaced.text);
+                if (!applied.ok) {
+                    post_agent_op_result("code_replace_result", { error: applied.error, path: displayPath });
+                    return;
+                }
+                if (tabRef.tab.scriptPath && scriptExplorerState.type === "local_upload") {
+                    if (scriptExplorerState.tree) {
+                        ensure_script_paths(scriptExplorerState.tree, "");
+                        const n = find_script_node_by_path(
+                            scriptExplorerState.tree,
+                            normalize_script_relative_path(tabRef.tab.scriptPath)
+                        );
+                        if (n && n.type === "file") {
+                            write_script_local_upload_node(n, replaced.text);
+                        }
+                    }
+                }
+            } else if (writeKind === "script" && scriptNode) {
+                const written = write_script_local_upload_node(scriptNode, replaced.text);
+                if (!written.ok) {
+                    post_agent_op_result("code_replace_result", { error: written.error, path: displayPath });
+                    return;
+                }
+                if (tabRef) {
+                    apply_text_to_editor_tab(tabRef.id, tabRef.tab, replaced.text);
+                }
+            } else if (writeKind === "vfs" && vfsPath) {
+                try {
+                    const bytes = new TextEncoder().encode(replaced.text);
+                    pyodide_js.FS.writeFile(vfsPath, bytes);
+                } catch (err) {
+                    post_agent_op_result("code_replace_result", {
+                        error: String(err && err.message ? err.message : err),
+                        path: displayPath
+                    });
+                    return;
+                }
+            }
+
+            post_agent_op_result("code_replace_result", {
+                path: displayPath,
+                replacements: replaced.replacements,
+                ran: false
+            });
+        }
+
+        /** 開いているタブを上書きせず RUN */
+        function handle_agent_run_current() {
+            if (!editor || !editor.getModel()) {
+                js_post_message("script_complete", "host", "*", {
+                    log: "Error: No active editor tab to run"
+                }, []);
+                return;
+            }
+            js_print_clear();
+            agent_run_flag = true;
+            console.log("# IDE_frame_log : agent_run_current");
+            button_RUN_click();
+        }
         //-------------------------------------------------------- ### Syntax_Check_Logic ###
         // 構文解析とエラーチェックを一度に行う関数
         async function analyze_python_code(code) {
@@ -7481,31 +8590,159 @@ sys.stderr = Web_Stdout()
             let activeAgentSource = null; // 現在Pythonスクリプトを実行要請しているエージェント ("NANO" | "WEB_BRIDGE" | "API")
             // VFS ツリー取得の返送先（script 実行と独立させ、取り違えを防ぐ）
             let activeVfsTreeSource = null;
+            // フェーズ A の観察・編集コマンド（snapshot / tree / search / read / replace）の返送先
+            let activeAgentOpSource = null;
 
             let continuousErrorCount = 0; // 連続する非有効コマンドの回数をカウントする変数
 
-            // 有規のコマンドが来たらリセット、エラーならカウントして3に達したら停止トリガー(true)を返す関数
-            function trackAgentResponseStatus(cmd) {
-                const validCommands = [
-                    "script_run_request",
-                    "add_memory",
-                    "memory_presentation",
-                    "user_verification",
-                    "goal_achieved",
-                    "vfs_tree_request"
-                ];
+            // Nano / Web ブリッジ向け（短いコンテキスト前提。増やさない）
+            const NANO_VALID_COMMANDS = [
+                "script_run_request",
+                "add_memory",
+                "memory_presentation",
+                "user_verification",
+                "goal_achieved",
+                "vfs_tree_request"
+            ];
+            // LLM API 経路のみ追加（観察・検索・読取・部分置換・実行分離）
+            const API_EXTRA_COMMANDS = [
+                "workspace_snapshot",
+                "script_tree_request",
+                "repo_search",
+                "file_read",
+                "code_replace",
+                "script_run"
+            ];
 
-                if (validCommands.includes(cmd)) {
-                    continuousErrorCount = 0; // 正常なコマンドが来たらカウントをリセット
+            // 経路に応じた有効コマンドか
+            function isValidAgentCommand(cmd, agentSource) {
+                if (NANO_VALID_COMMANDS.indexOf(cmd) !== -1) return true;
+                if (agentSource === "API" && API_EXTRA_COMMANDS.indexOf(cmd) !== -1) return true;
+                return false;
+            }
+
+            // 有効コマンドが来たらリセット、エラーならカウントして3に達したら停止トリガー(true)を返す
+            function trackAgentResponseStatus(cmd, agentSource) {
+                if (isValidAgentCommand(cmd, agentSource)) {
+                    continuousErrorCount = 0;
                     return false;
-                } else {
-                    continuousErrorCount++;
-                    console.warn(`[Agent Loop Warning] 連続エラーカウント: ${continuousErrorCount}/3 (現在の状態: ${cmd})`);
-                    if (continuousErrorCount >= 3) {
-                        continuousErrorCount = 0; // トリガーを引くため一度リセット
-                        return true;
+                }
+                continuousErrorCount++;
+                console.warn(`[Agent Loop Warning] 連続エラーカウント: ${continuousErrorCount}/3 (現在の状態: ${cmd})`);
+                if (continuousErrorCount >= 3) {
+                    continuousErrorCount = 0;
+                    return true;
+                }
+                return false;
+            }
+
+            // IDE へエージェント操作用 postMessage を送り、返送先を記録する
+            function postAgentOpToIde(agentSource, payload) {
+                activeAgentOpSource = agentSource;
+                const ideFrame = document.getElementById("ide_container");
+                if (ideFrame && ideFrame.contentWindow) {
+                    ideFrame.contentWindow.postMessage(payload, "*");
+                    return true;
+                }
+                const failCmd = payload && payload.resultCmd
+                    ? payload.resultCmd
+                    : "agent_op_result";
+                sendResponseToAgent({
+                    "cmd": failCmd,
+                    "error": "IDE frame is not ready"
+                }, agentSource);
+                activeAgentOpSource = null;
+                return false;
+            }
+
+            // github: プレフィックスだけ Host で判定（token は IDE に渡さない）
+            function agentPathIsGithub(rawPath) {
+                const p = String(rawPath == null ? "" : rawPath).trim().toLowerCase();
+                return p.indexOf("github:") === 0;
+            }
+
+            // ファイル本文の行範囲・文字数クリップ（GitHub 読取で Host が使う）
+            function sliceAgentFileContent(fullText, commandData) {
+                const text = (fullText == null) ? "" : String(fullText);
+                const lines = text.split("\n");
+                const total = lines.length;
+                let startLine = Number(commandData && commandData.startLine);
+                let endLine = Number(commandData && commandData.endLine);
+                if (!Number.isFinite(startLine) || startLine < 1) startLine = 1;
+                if (!Number.isFinite(endLine) || endLine < startLine) endLine = total;
+                startLine = Math.min(startLine, Math.max(1, total));
+                endLine = Math.min(endLine, total);
+                let maxChars = Number(commandData && commandData.maxChars);
+                if (!Number.isFinite(maxChars)) maxChars = 20000;
+                maxChars = Math.max(1, Math.min(40000, Math.floor(maxChars)));
+                const slicedLines = lines.slice(startLine - 1, endLine);
+                let content = slicedLines.join("\n");
+                let truncated = (startLine > 1) || (endLine < total);
+                if (content.length > maxChars) {
+                    content = content.slice(0, maxChars);
+                    truncated = true;
+                }
+                return {
+                    content: content,
+                    lineCount: total,
+                    startLine: startLine,
+                    endLine: endLine,
+                    truncated: truncated
+                };
+            }
+
+            function guessAgentLanguageFromName(fileName) {
+                const n = String(fileName || "").toLowerCase();
+                if (n.endsWith(".py")) return "python";
+                if (n.endsWith(".js")) return "javascript";
+                if (n.endsWith(".json")) return "json";
+                if (n.endsWith(".html") || n.endsWith(".htm")) return "html";
+                if (n.endsWith(".css")) return "css";
+                if (n.endsWith(".csv")) return "csv";
+                if (n.endsWith(".md")) return "markdown";
+                if (n.endsWith(".txt")) return "text";
+                return "text";
+            }
+
+            // GitHub 本文は Host 特権 API で読む（token はメモリのまま）
+            async function handleAgentGithubFileRead(commandData, agentSource) {
+                try {
+                    if (typeof githubFetchFileContent !== "function" || !githubCurrentRepo) {
+                        sendResponseToAgent({
+                            "cmd": "file_read_result",
+                            "error": "GitHub is not connected"
+                        }, agentSource);
+                        return;
                     }
-                    return false;
+                    let rel = String(commandData.path || "").replace(/^github:/i, "");
+                    rel = rel.replace(/^\/+/, "");
+                    if (!rel || rel.split("/").indexOf("..") !== -1) {
+                        sendResponseToAgent({
+                            "cmd": "file_read_result",
+                            "error": "Invalid GitHub path"
+                        }, agentSource);
+                        return;
+                    }
+                    const owner = githubCurrentRepo.owner;
+                    const repo = githubCurrentRepo.repo;
+                    const branch = githubCurrentRepo.branch || "main";
+                    const file = await githubFetchFileContent(owner, repo, rel, branch);
+                    const sliced = sliceAgentFileContent(file.content, commandData);
+                    sendResponseToAgent({
+                        "cmd": "file_read_result",
+                        "path": "github:" + (file.path || rel),
+                        "language": guessAgentLanguageFromName(file.path || rel),
+                        "lineCount": sliced.lineCount,
+                        "startLine": sliced.startLine,
+                        "endLine": sliced.endLine,
+                        "content": sliced.content,
+                        "truncated": sliced.truncated
+                    }, agentSource);
+                } catch (err) {
+                    sendResponseToAgent({
+                        "cmd": "file_read_result",
+                        "error": String(err && err.message ? err.message : err)
+                    }, agentSource);
                 }
             }
 
@@ -7565,11 +8802,31 @@ sys.stderr = Web_Stdout()
 
                 switch (commandData.cmd) {
                     case "script_run_request":
-                        if (commandData.script) {
-                            activeAgentSource = agentSource; // スクリプト実行完了時のレスポンス返し先を記憶
+                        // Nano / Web: 従来どおり全文セット + RUN
+                        // API: script があってもタブを上書きせず、アクティブタブを実行（破壊的上書きを止める）
+                        if (agentSource === "API") {
+                            activeAgentSource = agentSource;
+                            const ideFrameApi = document.getElementById("ide_container");
+                            if (ideFrameApi && ideFrameApi.contentWindow) {
+                                ideFrameApi.contentWindow.postMessage({ "cmd": "agent_run_current" }, "*");
+                            }
+                        } else if (commandData.script) {
+                            activeAgentSource = agentSource;
                             const ideFrame = document.getElementById("ide_container");
                             if (ideFrame && ideFrame.contentWindow) {
                                 ideFrame.contentWindow.postMessage({ "cmd": "agent_run", "code": commandData.script }, "*");
+                            }
+                        }
+                        break;
+
+                    // API 専用: 開いているタブを上書きせず実行
+                    case "script_run":
+                        if (agentSource !== "API") break;
+                        activeAgentSource = agentSource;
+                        {
+                            const ideFrameRun = document.getElementById("ide_container");
+                            if (ideFrameRun && ideFrameRun.contentWindow) {
+                                ideFrameRun.contentWindow.postMessage({ "cmd": "agent_run_current" }, "*");
                             }
                         }
                         break;
@@ -7631,6 +8888,72 @@ sys.stderr = Web_Stdout()
                         }
                         break;
                     }
+
+                    // --- フェーズ A（API のみ）観察・検索・読取・部分置換 ---
+                    case "workspace_snapshot":
+                        if (agentSource !== "API") break;
+                        postAgentOpToIde(agentSource, {
+                            "cmd": "agent_workspace_snapshot",
+                            "resultCmd": "workspace_snapshot_result"
+                        });
+                        break;
+
+                    case "script_tree_request":
+                        if (agentSource !== "API") break;
+                        postAgentOpToIde(agentSource, {
+                            "cmd": "agent_script_tree",
+                            "maxDepth": commandData.maxDepth,
+                            "resultCmd": "script_tree_result"
+                        });
+                        break;
+
+                    case "repo_search":
+                        if (agentSource !== "API") break;
+                        postAgentOpToIde(agentSource, {
+                            "cmd": "agent_repo_search",
+                            "query": commandData.query,
+                            "scope": commandData.scope,
+                            "glob": commandData.glob,
+                            "maxHits": commandData.maxHits,
+                            "context": commandData.context,
+                            "resultCmd": "repo_search_result"
+                        });
+                        break;
+
+                    case "file_read":
+                        if (agentSource !== "API") break;
+                        if (agentPathIsGithub(commandData.path)) {
+                            handleAgentGithubFileRead(commandData, agentSource);
+                        } else {
+                            postAgentOpToIde(agentSource, {
+                                "cmd": "agent_file_read",
+                                "path": commandData.path,
+                                "startLine": commandData.startLine,
+                                "endLine": commandData.endLine,
+                                "maxChars": commandData.maxChars,
+                                "resultCmd": "file_read_result"
+                            });
+                        }
+                        break;
+
+                    case "code_replace":
+                        if (agentSource !== "API") break;
+                        if (agentPathIsGithub(commandData.path)) {
+                            sendResponseToAgent({
+                                "cmd": "code_replace_result",
+                                "error": "GitHub paths are read-only. Use tab: or script: (local_upload) or vfs:"
+                            }, agentSource);
+                            break;
+                        }
+                        postAgentOpToIde(agentSource, {
+                            "cmd": "agent_code_replace",
+                            "path": commandData.path,
+                            "oldString": commandData.oldString,
+                            "newString": commandData.newString,
+                            "replaceAll": commandData.replaceAll === true,
+                            "resultCmd": "code_replace_result"
+                        });
+                        break;
 
                     case "Multiple_commands":
                     case "No_Command":
@@ -7775,6 +9098,46 @@ sys.stderr = Web_Stdout()
   - Python 実行環境を含むメインの IDE コンテンツは sandbox 属性を付与した iframe 内で動作（セキュリティ考慮）
 - web アプリプラットフォームとしての利用も想定
 - 親 window 且つ Gemini のドメインから送られてきた PostMessage を解析し、既定の Json が検出できればそれに応じた処理を実行します`;
+
+            // LLM API 経路専用（Nano には渡さない）。地図→検索→読取→置換。実行は明示時のみ。
+            const api_agent_system_prompt = `# システムプロンプト
+- あなたは Pyodide Python IDE に接続されたコーディングエージェントです
+## 目的
+- ユーザーの指示を自律的に達成し、完了したら goal_achieved で報告する
+### ワークスペース
+- tab: または active … 開いているエディタタブ
+- script:相対パス … Script_Explorer（local_upload / local / github ツリー）
+- vfs: または /mnt/vfs_root/… … Pyodide VFS
+- github:相対パス … リモート読取のみ（書込・Push 不可）
+### 手順
+1. まず workspace_snapshot または script_tree_request / vfs_tree_request で地図を取る（本文は載せない）
+2. 探すときは repo_search
+3. 直す前に file_read で該当箇所を読む
+4. 部分修正は code_replace（完全一致）。実行はユーザーが走らせたいときだけ script_run
+#### 遵守事項
+- 1応答に JSON コマンドは必ず1つ。コマンド以外の文章は不要
+- JSON に生の改行やトリプルクォートは使えない。改行は \\n
+- GitHub へは書かない。code_replace の対象は tab / script(local_upload) / vfs のみ
+- script_run_request に script を付けてもタブは上書きされない。実行は開いているタブ
+## コマンド
+{"cmd":"workspace_snapshot"}
+{"cmd":"script_tree_request","maxDepth":8}
+{"cmd":"vfs_tree_request","path":"/mnt/vfs_root","maxDepth":8}
+{"cmd":"repo_search","query":"検索語","scope":"all","glob":"*.py","maxHits":30,"context":2}
+- scope: script / vfs / tabs / all（既定 all）。github 本文は検索しない
+{"cmd":"file_read","path":"active","startLine":1,"endLine":80,"maxChars":20000}
+{"cmd":"code_replace","path":"active","oldString":"一致させる既存断片","newString":"置換後","replaceAll":false}
+- oldString が0件または2件以上（replaceAll=false）なら実行しない
+{"cmd":"script_run"}
+{"cmd":"add_memory","content":[{"key":"value"}]}
+{"cmd":"memory_presentation"}
+{"cmd":"user_verification","message":"確認内容"}
+{"cmd":"goal_achieved","message":"完了内容"}
+## 結果
+- workspace_snapshot_result / script_tree_result / vfs_tree_result / repo_search_result / file_read_result / code_replace_result / script_result
+- 失敗時は error フィールド
+{"cmd":"Multiple_commands","message":"${t("agentMultiCommand")}"}
+{"cmd":"No_Command","message":"${t("agentNoCommand")}"}`;
 
             //-------------------------------------------------------- ### header_element
             const toggle_sidebar_button = document.getElementById("toggle_sidebar");
@@ -9594,7 +10957,7 @@ ${newRawLog}`;
                     const commandData = parseAgentResponse(text);
 
                     // 連続エラーカウントをチェック
-                    if (trackAgentResponseStatus(commandData.cmd)) {
+                    if (trackAgentResponseStatus(commandData.cmd, "NANO")) {
                         alert(t("agentStopNano"));
                         this.appendMessage("🛑 3回連続でコマンド非検出、または構文エラーが続いたため、自律ループを強制停止しました。指示内容を見直してください。", "system");
                         return; // ここで処理を遮断し、自動フィードバックループを止めます
@@ -9926,16 +11289,17 @@ ${newRawLog}`;
 - 簡潔に回答してください${langHint}`;
                     }
 
-                    // 既存 Web ブリッジ用プロンプトをベースに、初回目的を埋め込む
+                    // API 専用プロンプト（観察・検索・部分置換）。Nano 用 custom_system_prompt は使わない
                     const purpose = firstInstruction
-                        ? `- あなたの目的はユーザーから与えられた以下の指示を自律的に達成することです\n  - ${firstInstruction}\n  - 目的を達成した後は後述の「目的達成」 json フォーマットで完了報告してください`
-                        : `- あなたはエージェンティックに動作し、ユーザーが与える目的を達成してください\n  - 目的を達成した後は後述の「目的達成」 json フォーマットで完了報告してください`;
+                        ? `- ユーザー指示: ${firstInstruction}\n- 目的達成後は goal_achieved で報告する`
+                        : `- ユーザーが与える目的を達成し、完了後は goal_achieved で報告する`;
 
-                    // custom_system_prompt は 02_gemini_nano_base.js で定義済み
-                    let base = typeof custom_system_prompt === "string" ? custom_system_prompt : "";
-                    // 「## 目的」セクションを差し替え（テンプレートの汎用目的を具体化）
+                    let base = (typeof api_agent_system_prompt === "string" && api_agent_system_prompt)
+                        ? api_agent_system_prompt
+                        : (typeof custom_system_prompt === "string" ? custom_system_prompt : "");
+                    // 「## 目的」を初回指示で具体化
                     base = base.replace(
-                        /## 目的\n[\s\S]*?(?=### 目的を達成するためのツール)/,
+                        /## 目的\n[\s\S]*?(?=### ワークスペース|### 目的を達成するためのツール)/,
                         `## 目的\n${purpose}\n`
                     );
                     return base + langHint;
@@ -10149,7 +11513,7 @@ ${newRawLog}`;
                         return;
                     }
                     const commandData = parseAgentResponse(text);
-                    if (trackAgentResponseStatus(commandData.cmd)) {
+                    if (trackAgentResponseStatus(commandData.cmd, "API")) {
                         alert(t("agentStopNano"));
                         this.appendMessage(t("agentForceStopMsg"), "system", false);
                         return;
@@ -11370,7 +12734,7 @@ ${newRawLog}`;
 
                 // ブックマークレット連携（外部LLM）からの応答の場合のみ連続エラーを判定
                 if (event.source === window.opener && is_allowed_origin) {
-                    if (trackAgentResponseStatus(data.cmd)) {
+                    if (trackAgentResponseStatus(data.cmd, "WEB_BRIDGE")) {
                         alert(t("agentStopBridge"));
 
                         // 呼び出し元のGemini側にも停止メッセージを投げて無限フィードバックを防ぐ
@@ -11441,6 +12805,27 @@ ${newRawLog}`;
                         activeVfsTreeSource = null;
                     } else {
                         console.warn("# host_frame_log : activeVfsTreeSource is null. Cannot send vfs_tree_result.");
+                    }
+                    return;
+                }
+
+                //-------------------------------------------------------- ### Agent フェーズ A 結果（snapshot / tree / search / read / replace）
+                if (data && typeof data.cmd === "string" && (
+                    data.cmd === "workspace_snapshot_result" ||
+                    data.cmd === "script_tree_result" ||
+                    data.cmd === "repo_search_result" ||
+                    data.cmd === "file_read_result" ||
+                    data.cmd === "code_replace_result"
+                )) {
+                    const obj = data.obj || {};
+                    // IDE が載せたフィールドをそのままエージェントへ返す（error があれば残す）
+                    const responsePayload = Object.assign({ "cmd": data.cmd }, obj);
+                    if (activeAgentOpSource) {
+                        sendResponseToAgent(responsePayload, activeAgentOpSource);
+                        console.log(`# host_frame_log : Sent_${data.cmd} to ${activeAgentOpSource}`);
+                        activeAgentOpSource = null;
+                    } else {
+                        console.warn("# host_frame_log : activeAgentOpSource is null. Cannot send " + data.cmd);
                     }
                     return;
                 }
