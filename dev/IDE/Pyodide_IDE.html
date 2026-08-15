@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pyodide_IDE(v1.12.040)</title>
+    <title>Pyodide_IDE(v1.12.041)</title>
     <link rel="icon" type="image/png" href="favicon.png">
 
     <meta http-equiv="Content-Security-Policy" content="
@@ -242,7 +242,7 @@
             gap: 10px;
             font-size: 13px;
             background: var(--bg-panel);
-            min-height: 0;
+            min-height: 80px;
         }
 
         #nano-chat-container::-webkit-scrollbar {
@@ -278,6 +278,84 @@
             color: #fff;
             align-self: flex-end;
             border: 1px solid transparent;
+            position: relative;
+            padding-right: 28px;
+        }
+
+        /* ユーザー吹き出しの編集（ホバー / フォーカスで表示） */
+        .nano-msg-edit-btn {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 20px;
+            height: 20px;
+            padding: 0;
+            border: none;
+            border-radius: var(--radius-sm);
+            background: rgba(0, 0, 0, 0.22);
+            color: #fff;
+            font-size: 11px;
+            line-height: 20px;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity var(--transition-fast), background var(--transition-fast);
+        }
+
+        .nano-msg-user:hover .nano-msg-edit-btn,
+        .nano-msg-user:focus-within .nano-msg-edit-btn,
+        .nano-msg-edit-btn:focus-visible {
+            opacity: 1;
+        }
+
+        .nano-msg-edit-btn:hover {
+            background: rgba(0, 0, 0, 0.4);
+        }
+
+        .nano-msg-user.nano-msg-editing {
+            padding-right: 12px;
+        }
+
+        .nano-msg-edit-area {
+            width: 100%;
+            min-height: 56px;
+            max-height: 180px;
+            box-sizing: border-box;
+            padding: 6px 8px;
+            background-color: rgba(0, 0, 0, 0.18);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            border-radius: var(--radius-sm);
+            resize: vertical;
+            outline: none;
+            font-size: 13px;
+            font-family: var(--font-ui);
+            line-height: 1.45;
+        }
+
+        .nano-msg-edit-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .nano-msg-edit-actions button {
+            padding: 3px 10px;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .nano-msg-edit-save {
+            background-color: #fff;
+            color: var(--accent);
+        }
+
+        .nano-msg-edit-cancel {
+            background-color: rgba(0, 0, 0, 0.25);
+            color: #fff;
         }
 
         .nano-msg-system {
@@ -395,6 +473,38 @@
             border-color: var(--accent);
         }
 
+        #nano-input-resizer {
+            height: 6px;
+            margin: 0 -4px;
+            cursor: ns-resize;
+            flex-shrink: 0;
+            border-radius: 3px;
+            background: transparent;
+            position: relative;
+        }
+
+        #nano-input-resizer::after {
+            content: "";
+            position: absolute;
+            left: 50%;
+            top: 2px;
+            width: 36px;
+            height: 2px;
+            margin-left: -18px;
+            border-radius: 1px;
+            background: var(--border-strong);
+        }
+
+        #nano-input-resizer:hover,
+        #nano-input-resizer:focus-visible {
+            background: var(--accent-soft);
+        }
+
+        #nano-input-resizer:hover::after,
+        #nano-input-resizer:focus-visible::after {
+            background: var(--accent);
+        }
+
         #nano-chat-input-box {
             display: flex;
             gap: 8px;
@@ -404,6 +514,7 @@
         #nano-user-input {
             flex: 1;
             height: 36px;
+            min-height: 36px;
             padding: 8px 10px;
             background-color: var(--bg-input);
             color: var(--text-primary);
@@ -413,6 +524,8 @@
             outline: none;
             font-size: 13px;
             font-family: var(--font-ui);
+            line-height: 1.4;
+            overflow-y: auto;
             transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
         }
 
@@ -432,6 +545,9 @@
             font-size: 13px;
             transition: background-color var(--transition-fast), opacity var(--transition-fast);
             white-space: nowrap;
+            align-self: flex-end;
+            height: 36px;
+            flex-shrink: 0;
         }
 
         #nano-send-btn:hover:not(:disabled) {
@@ -948,6 +1064,7 @@
                         <option value="fr">fr</option>
                     </select>
                 </div>
+                <div id="nano-input-resizer" title="入力欄の高さを変更" data-i18n-title="nanoInputResizeTitle"></div>
                 <div id="nano-chat-input-box">
                     <textarea id="nano-user-input" placeholder="指令を入力... (Enterで送信)" data-i18n-placeholder="nanoPlaceholder"></textarea>
                     <button id="nano-send-btn" type="button" data-i18n="nanoSend">送信</button>
@@ -8417,6 +8534,10 @@ sys.stderr = Web_Stdout()
                     nanoStatusDlProgress: "🔄 DL中... {progress}%",
                     nanoStatusReadyGreen: "🟢 準備完了",
                     nanoStatusStartFail: "❌ 起動失敗",
+                    nanoInputResizeTitle: "入力欄の高さを変更",
+                    nanoPromptEditTitle: "プロンプトを編集",
+                    nanoPromptEditCancel: "キャンセル",
+                    nanoPromptEditSend: "送信",
                 },
                 en: {
                     githubNotLoggedIn: "Not logged in",
@@ -8524,6 +8645,10 @@ sys.stderr = Web_Stdout()
                     nanoStatusDlProgress: "🔄 Downloading... {progress}%",
                     nanoStatusReadyGreen: "🟢 Ready",
                     nanoStatusStartFail: "❌ Failed to start",
+                    nanoInputResizeTitle: "Resize input height",
+                    nanoPromptEditTitle: "Edit prompt",
+                    nanoPromptEditCancel: "Cancel",
+                    nanoPromptEditSend: "Send",
                 }
             };
 
@@ -9227,6 +9352,61 @@ sys.stderr = Web_Stdout()
                 }
                 document.body.style.cursor = "";
                 document.body.style.userSelect = "";
+            });
+
+            //-------------------------------------------------------- ### プロンプト入力欄の高さリサイズ
+            const nanoInputResizerElement = document.getElementById("nano-input-resizer");
+            const nanoUserInputElement = document.getElementById("nano-user-input");
+            const nanoChatContainerElement = document.getElementById("nano-chat-container");
+            // offsetHeight 基準。既定 CSS は content-box 36px + padding/border で約 54px
+            const NANO_INPUT_MIN_HEIGHT = 54;
+            const NANO_INPUT_ABS_MAX_HEIGHT = 280;
+            let startNanoInputHeight = NANO_INPUT_MIN_HEIGHT;
+
+            // チャット領域が潰れない範囲で入力欄高さをクランプ
+            const clampNanoInputHeight = (desiredHeight) => {
+                const sidebarHeight = aiSidebarElement ? aiSidebarElement.clientHeight : window.innerHeight;
+                const chatHeight = nanoChatContainerElement ? nanoChatContainerElement.offsetHeight : 0;
+                const inputHeight = nanoUserInputElement ? nanoUserInputElement.offsetHeight : NANO_INPUT_MIN_HEIGHT;
+                const chatMinKeep = 80;
+                const maxByChat = Math.max(NANO_INPUT_MIN_HEIGHT, inputHeight + chatHeight - chatMinKeep);
+                const maxByRatio = Math.floor(sidebarHeight * 0.45);
+                const maxHeight = Math.max(
+                    NANO_INPUT_MIN_HEIGHT,
+                    Math.min(NANO_INPUT_ABS_MAX_HEIGHT, maxByRatio, maxByChat)
+                );
+                return Math.min(maxHeight, Math.max(NANO_INPUT_MIN_HEIGHT, desiredHeight));
+            };
+
+            const applyNanoInputHeight = (desiredHeight) => {
+                if (!nanoUserInputElement) return;
+                nanoUserInputElement.style.height = `${clampNanoInputHeight(desiredHeight)}px`;
+            };
+
+            attachDragHandler(nanoInputResizerElement, (_dx, dy) => {
+                // ハンドルは入力欄の上。上方向（dy マイナス）で高さを増やす
+                applyNanoInputHeight(startNanoInputHeight - dy);
+            }, () => {
+                startNanoInputHeight = nanoUserInputElement
+                    ? nanoUserInputElement.offsetHeight
+                    : NANO_INPUT_MIN_HEIGHT;
+                if (ideFrameElement) {
+                    ideFrameElement.style.pointerEvents = "none";
+                }
+                document.body.style.cursor = "ns-resize";
+                document.body.style.userSelect = "none";
+            }, () => {
+                if (ideFrameElement) {
+                    ideFrameElement.style.pointerEvents = "";
+                }
+                document.body.style.cursor = "";
+                document.body.style.userSelect = "";
+            });
+
+            window.addEventListener("resize", () => {
+                if (nanoUserInputElement) {
+                    applyNanoInputHeight(nanoUserInputElement.offsetHeight);
+                }
             });
 
             //-------------------------------------------------------- ### button_enabled_disabled ###
@@ -10295,6 +10475,7 @@ sys.stderr = Web_Stdout()
                     this.isFirstSession = true; // 初回起動（セッション未確立）かどうかを管理するフラグ
                     this.abortController = null; // 中断制御用のコントローラー
                     this.isGenerating = false; // 現在AIが応答生成中かどうかのフラグ
+                    this.activeEditMsg = null; // 編集中のユーザー吹き出し
                 }
 
                 // エラー発生時やモデル未サポート時に、UIを入力可能な初期状態へ安全に戻すヘルパー関数
@@ -10345,6 +10526,153 @@ sys.stderr = Web_Stdout()
                     }
                 }
 
+                // 生成中または API 経路の生成中なら true
+                isChatBusy() {
+                    if (this.isGenerating) return true;
+                    if (typeof LLM_API_AGENT !== "undefined" && LLM_API_AGENT && LLM_API_AGENT.isGenerating) {
+                        return true;
+                    }
+                    return false;
+                }
+
+                // 進行中の吹き出し編集を破棄（表示を元テキストへ戻す）
+                cancelActivePromptEdit() {
+                    const msgDiv = this.activeEditMsg;
+                    if (!msgDiv || !msgDiv.classList.contains("nano-msg-editing")) {
+                        this.activeEditMsg = null;
+                        return;
+                    }
+                    const original = msgDiv.dataset.promptText || "";
+                    this.restoreUserBubble(msgDiv, original);
+                }
+
+                // ユーザー吹き出しを本文 + 編集ボタンの通常表示へ戻す
+                restoreUserBubble(msgDiv, text) {
+                    if (!msgDiv) return;
+                    msgDiv.classList.remove("nano-msg-editing");
+                    msgDiv.dataset.promptText = text;
+                    while (msgDiv.firstChild) {
+                        msgDiv.removeChild(msgDiv.firstChild);
+                    }
+                    const body = document.createElement("span");
+                    body.className = "nano-msg-body";
+                    body.textContent = text;
+                    msgDiv.appendChild(body);
+                    this.attachUserPromptEdit(msgDiv);
+                    if (this.activeEditMsg === msgDiv) {
+                        this.activeEditMsg = null;
+                    }
+                }
+
+                // ユーザー吹き出しに Edit ボタンを付ける（textContent は使わない）
+                attachUserPromptEdit(msgDiv) {
+                    if (!msgDiv || msgDiv.querySelector(".nano-msg-edit-btn")) return;
+                    const editBtn = document.createElement("button");
+                    editBtn.type = "button";
+                    editBtn.className = "nano-msg-edit-btn";
+                    editBtn.title = t("nanoPromptEditTitle");
+                    editBtn.textContent = "✎";
+                    editBtn.addEventListener("click", (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        this.beginEditUserMessage(msgDiv);
+                    });
+                    msgDiv.appendChild(editBtn);
+                }
+
+                // 吹き出し内でプロンプトを編集する
+                beginEditUserMessage(msgDiv) {
+                    if (!msgDiv || msgDiv.classList.contains("nano-msg-editing")) return;
+                    if (this.isChatBusy()) return;
+                    if (this.activeEditMsg && this.activeEditMsg !== msgDiv) {
+                        this.cancelActivePromptEdit();
+                    }
+                    const body = msgDiv.querySelector(".nano-msg-body");
+                    const original = body ? body.textContent : (msgDiv.dataset.promptText || "");
+                    msgDiv.dataset.promptText = original;
+                    msgDiv.classList.add("nano-msg-editing");
+                    this.activeEditMsg = msgDiv;
+                    while (msgDiv.firstChild) {
+                        msgDiv.removeChild(msgDiv.firstChild);
+                    }
+
+                    const area = document.createElement("textarea");
+                    area.className = "nano-msg-edit-area";
+                    area.value = original;
+                    area.setAttribute("aria-label", t("nanoPromptEditTitle"));
+
+                    const actions = document.createElement("div");
+                    actions.className = "nano-msg-edit-actions";
+                    const cancelBtn = document.createElement("button");
+                    cancelBtn.type = "button";
+                    cancelBtn.className = "nano-msg-edit-cancel";
+                    cancelBtn.textContent = t("nanoPromptEditCancel");
+                    const sendBtn = document.createElement("button");
+                    sendBtn.type = "button";
+                    sendBtn.className = "nano-msg-edit-save";
+                    sendBtn.textContent = t("nanoPromptEditSend");
+                    actions.appendChild(cancelBtn);
+                    actions.appendChild(sendBtn);
+                    msgDiv.appendChild(area);
+                    msgDiv.appendChild(actions);
+
+                    cancelBtn.addEventListener("click", (event) => {
+                        event.preventDefault();
+                        this.cancelActivePromptEdit();
+                    });
+                    sendBtn.addEventListener("click", (event) => {
+                        event.preventDefault();
+                        this.commitPromptEdit(msgDiv);
+                    });
+                    area.addEventListener("keydown", (event) => {
+                        if (event.key === "Escape") {
+                            event.preventDefault();
+                            this.cancelActivePromptEdit();
+                            return;
+                        }
+                        if (event.key === "Enter" && !event.shiftKey) {
+                            event.preventDefault();
+                            this.commitPromptEdit(msgDiv);
+                        }
+                    });
+                    area.focus();
+                    area.setSelectionRange(area.value.length, area.value.length);
+                }
+
+                // 編集確定: API は履歴巻き戻し、Nano は新ターンとして送る
+                commitPromptEdit(msgDiv) {
+                    if (!msgDiv || this.isChatBusy()) return;
+                    const area = msgDiv.querySelector(".nano-msg-edit-area");
+                    const newText = area ? String(area.value || "").trim() : "";
+                    if (!newText) return;
+                    const oldText = msgDiv.dataset.promptText || "";
+                    this.restoreUserBubble(msgDiv, newText);
+
+                    const provider = (typeof getSelectedLlmProvider === "function")
+                        ? getSelectedLlmProvider()
+                        : "nano";
+                    if (provider !== "nano" && typeof LLM_API_AGENT !== "undefined" && LLM_API_AGENT) {
+                        const accepted = LLM_API_AGENT.submitEditedPrompt(msgDiv, newText);
+                        if (!accepted) {
+                            this.restoreUserBubble(msgDiv, oldText);
+                        }
+                        return;
+                    }
+                    this.updatePendingUserLog(oldText, newText);
+                    this.sendUserText(newText);
+                }
+
+                // 未要約バッファの直近一致 user 本文を更新（Nano 要約用）
+                updatePendingUserLog(oldText, newText) {
+                    if (!this.pendingLogs || !this.pendingLogs.length) return;
+                    for (let i = this.pendingLogs.length - 1; i >= 0; i--) {
+                        if (this.pendingLogs[i].role === "user" && this.pendingLogs[i].content === oldText) {
+                            this.pendingLogs[i].content = newText;
+                            return;
+                        }
+                    }
+                }
+
                 // ユーザーメッセージの送信処理およびAI応答のストリーミング制御
                 async handleSend() {
                     // 外部 LLM API 選択時は LlmApiAgent へ委譲（ステートレス + 履歴コンテキスト）
@@ -10353,17 +10681,27 @@ sys.stderr = Web_Stdout()
                             return LLM_API_AGENT.handleSend();
                         }
                     }
+                    if (this.isGenerating) return;
                     const text = this.userInput.value.trim();
                     if (!text) return;
+                    this.cancelActivePromptEdit();
+                    this.appendMessage(text, "user");
+                    this.userInput.value = "";
+                    await this.sendUserText(text);
+                }
 
+                // 表示済みテキストを Nano セッションへ送る（入力欄は触らない）
+                async sendUserText(text) {
                     // 初回送信時はセッションの起動処理を優先する（送信ボタンが起動処理を兼ねる）
                     if (this.isFirstSession) {
-                        this.appendMessage(text, "user"); // 最初の指示をチャット欄へ表示
-                        this.userInput.value = "";
-                        
+                        // 起動待ち中も編集・再送できないようビジーにする
+                        this.isGenerating = true;
                         // 最初の指示を引数として渡し、システムプロンプトに埋め込んで起動
                         const isStarted = await this.startLocalAI(text);
-                        if (!isStarted) return; // デバイスが未対応、モデル未ダウンロードなどの場合は処理を遮断
+                        if (!isStarted) {
+                            this.isGenerating = false;
+                            return; // デバイスが未対応、モデル未ダウンロードなどの場合は処理を遮断
+                        }
                         
                         this.isFirstSession = false; // 起動に成功したため初回フラグを解除
                         
@@ -10374,10 +10712,6 @@ sys.stderr = Web_Stdout()
 
                     if (!this.aiSession) return;
 
-                    // 2回目以降の通常のメッセージ送信処理
-                    this.appendMessage(text, "user");
-                    this.userInput.value = "";
-
                     // 先に要約を生成・画面表示する（これによりサマリーが上に表示される）
                     const summary = await this.generateSummary();
 
@@ -10386,6 +10720,7 @@ sys.stderr = Web_Stdout()
 
                     // 応答中の状態を設定し、UIを「中断」モードへ切り替える
                     this.isGenerating = true;
+                    this.cancelActivePromptEdit();
                     const controller = new AbortController();
                     this.abortController = controller;
 
@@ -10452,6 +10787,7 @@ sys.stderr = Web_Stdout()
                     const aiMsgDiv = this.appendMessage("...", "ai", false);
 
                     this.isGenerating = true;
+                    this.cancelActivePromptEdit();
                     const controller = new AbortController();
                     this.abortController = controller;
 
@@ -10522,7 +10858,17 @@ sys.stderr = Web_Stdout()
                         msgDiv.classList.add("nano-msg-ai");
                     }
 
-                    msgDiv.textContent = text;
+                    // ユーザー吹き出しは本文 span + Edit（textContent 直書きだとボタンが消える）
+                    if (sender === "user") {
+                        const body = document.createElement("span");
+                        body.className = "nano-msg-body";
+                        body.textContent = text;
+                        msgDiv.appendChild(body);
+                        msgDiv.dataset.promptText = text;
+                        this.attachUserPromptEdit(msgDiv);
+                    } else {
+                        msgDiv.textContent = text;
+                    }
                     this.chatContainer.appendChild(msgDiv);
 
                     // 最下部へスクロール
@@ -10822,9 +11168,11 @@ sys.stderr = Web_Stdout()
                     if (this.inputBox) {
                         this.inputBox.style.display = "flex"; // 常に入力欄を表示する新仕様に合わせ、noneからflexへ修正
                     }
+                    this.activeEditMsg = null;
                     if (this.userInput) {
                         this.userInput.value = "";
                         this.userInput.disabled = false;
+                        this.userInput.style.height = "";
                     }
                     if (this.sendBtn) {
                         this.sendBtn.disabled = false; // 送信ボタンを有効化して初回起動を待てる状態にする
@@ -10991,6 +11339,7 @@ ${newRawLog}`;
 
                     // 応答中の状態を設定し、UIを「中断」モードへ切り替える
                     this.isGenerating = true;
+                    this.cancelActivePromptEdit();
                     const controller = new AbortController();
                     this.abortController = controller;
 
@@ -11147,8 +11496,9 @@ ${newRawLog}`;
                     this.baseUrlInput = document.getElementById("llm-base-url-input");
 
                     // ステートレス API 用の会話コンテキスト（メモリのみ）
-                    this.messages = []; // { role, content }[]  system 先頭
+                    this.messages = []; // { role, content, userTurnId? }[]  system 先頭
                     this.sessionStarted = false;
+                    this.nextUserTurnId = 1; // ユーザー吹き出しと messages[] の対応
                     this.isGenerating = false;
                     this.abortController = null;
 
@@ -11316,10 +11666,16 @@ ${newRawLog}`;
                         rest = rest.slice(rest.length - LLM_MAX_HISTORY_MESSAGES);
                     }
                     // 各 content の極端な長さを抑制（新しい配列を一度だけ構築）
-                    const clamped = rest.map((m) => ({
-                        role: m.role,
-                        content: clampLlmText(m.content, LLM_MAX_MESSAGE_CHARS)
-                    }));
+                    const clamped = rest.map((m) => {
+                        const item = {
+                            role: m.role,
+                            content: clampLlmText(m.content, LLM_MAX_MESSAGE_CHARS)
+                        };
+                        if (m.userTurnId != null) {
+                            item.userTurnId = m.userTurnId;
+                        }
+                        return item;
+                    });
                     this.messages = [system].concat(clamped);
                 }
 
@@ -11382,7 +11738,96 @@ ${newRawLog}`;
                     }
                 }
 
+                /**
+                 * ユーザー吹き出し編集後: 当該通以降を履歴・DOM から消し、置換して再リクエスト
+                 * @returns {boolean} 接続設定が不正なら false（吹き出しを呼び出し側で戻す）
+                 */
+                submitEditedPrompt(msgDiv, newText) {
+                    const text = String(newText || "").trim();
+                    if (!text) return false;
+
+                    const conn = this.resolveConnection();
+                    if (!conn.ok) {
+                        alert(conn.error);
+                        return false;
+                    }
+
+                    this.rewindAfterUserBubble(msgDiv, text);
+                    this.trimMessages();
+                    this.runCompletion(conn);
+                    return true;
+                }
+
+                // ユーザー吹き出しに turnId を付け、messages[] へ積む
+                pushUserTurn(msgDiv, text) {
+                    const turnId = this.nextUserTurnId++;
+                    if (msgDiv) {
+                        msgDiv.dataset.userTurnId = String(turnId);
+                    }
+                    this.messages.push({ role: "user", content: text, userTurnId: turnId });
+                    return turnId;
+                }
+
+                /**
+                 * 対象ユーザー吹き出しより後の DOM と messages[] を切り、当該 user を newText に置換
+                 */
+                rewindAfterUserBubble(msgDiv, newText) {
+                    if (this.chatContainer && msgDiv && msgDiv.parentNode === this.chatContainer) {
+                        while (msgDiv.nextSibling) {
+                            this.chatContainer.removeChild(msgDiv.nextSibling);
+                        }
+                    }
+
+                    if (!this.sessionStarted || this.messages.length === 0) {
+                        this.ensureSession(newText);
+                    }
+
+                    const turnIdRaw = msgDiv ? msgDiv.dataset.userTurnId : "";
+                    const turnId = turnIdRaw ? Number(turnIdRaw) : NaN;
+                    let cutAt = -1;
+                    if (!isNaN(turnId)) {
+                        for (let i = 0; i < this.messages.length; i++) {
+                            if (this.messages[i].userTurnId === turnId) {
+                                cutAt = i;
+                                break;
+                            }
+                        }
+                    }
+
+                    // トリム済みなどで ID が無いときは、フィードバック以外の最後の user を対象にする
+                    if (cutAt < 0) {
+                        for (let i = this.messages.length - 1; i >= 0; i--) {
+                            const message = this.messages[i];
+                            if (message.role !== "user") continue;
+                            if (String(message.content || "").indexOf("[システムからの実行結果]") === 0) continue;
+                            cutAt = i;
+                            break;
+                        }
+                    }
+
+                    if (cutAt < 0) {
+                        this.pushUserTurn(msgDiv, newText);
+                        this.sessionStarted = true;
+                        return;
+                    }
+
+                    const kept = this.messages.slice(0, cutAt);
+                    const isFirstUserTurn = !kept.some((m) => m.userTurnId != null);
+                    if (isFirstUserTurn) {
+                        const systemContent = this.buildSystemPrompt(newText);
+                        if (kept.length && kept[0].role === "system") {
+                            kept[0] = { role: "system", content: systemContent };
+                        } else {
+                            kept.unshift({ role: "system", content: systemContent });
+                        }
+                    }
+                    this.messages = kept;
+                    this.pushUserTurn(msgDiv, newText);
+                    this.sessionStarted = true;
+                }
+
                 async handleSend() {
+                    if (this.isGenerating) return;
                     const text = this.userInput ? this.userInput.value.trim() : "";
                     if (!text) return;
 
@@ -11392,7 +11837,11 @@ ${newRawLog}`;
                         return;
                     }
 
-                    this.appendMessage(text, "user", false);
+                    if (GNM && typeof GNM.cancelActivePromptEdit === "function") {
+                        GNM.cancelActivePromptEdit();
+                    }
+
+                    const msgDiv = this.appendMessage(text, "user", false);
                     if (this.userInput) this.userInput.value = "";
 
                     // 初回は system に目的を埋め込み、以降は履歴で文脈維持
@@ -11400,7 +11849,7 @@ ${newRawLog}`;
                         this.ensureSession(text);
                     }
 
-                    this.messages.push({ role: "user", content: text });
+                    this.pushUserTurn(msgDiv, text);
                     this.trimMessages();
 
                     await this.runCompletion(conn);
@@ -11437,6 +11886,9 @@ ${newRawLog}`;
                  * ストリーミング完了まで UI を生成中モードにして API を叩く
                  */
                 async runCompletion(conn) {
+                    if (GNM && typeof GNM.cancelActivePromptEdit === "function") {
+                        GNM.cancelActivePromptEdit();
+                    }
                     const aiMsgDiv = this.appendMessage("...", "ai", false);
 
                     this.isGenerating = true;
@@ -11454,7 +11906,7 @@ ${newRawLog}`;
 
                     let fullText = "";
                     try {
-                        fullText = await this.streamChat(conn, this.messages, controller.signal, (chunk) => {
+                        fullText = await this.streamChat(conn, this.messagesForApi(this.messages), controller.signal, (chunk) => {
                             if (aiMsgDiv.textContent === "...") {
                                 aiMsgDiv.textContent = "";
                             }
@@ -11523,6 +11975,17 @@ ${newRawLog}`;
                     } catch (error) {
                         console.error("[LLM API] command execution error:", error);
                     }
+                }
+
+                /**
+                 * 内部用 userTurnId を除いた role/content だけを API へ渡す
+                 */
+                messagesForApi(messages) {
+                    const out = [];
+                    for (let i = 0; i < messages.length; i++) {
+                        out.push({ role: messages[i].role, content: messages[i].content });
+                    }
+                    return out;
                 }
 
                 /**
@@ -11862,10 +12325,17 @@ ${newRawLog}`;
                 resetConversation(clearChatDom) {
                     this.messages = [];
                     this.sessionStarted = false;
+                    this.nextUserTurnId = 1;
                     if (this.abortController) {
                         try { this.abortController.abort(); } catch (e) { /* ignore */ }
                     }
                     this.resetUiToReady();
+                    if (GNM) {
+                        GNM.activeEditMsg = null;
+                    }
+                    if (this.userInput) {
+                        this.userInput.style.height = "";
+                    }
                     if (clearChatDom && this.chatContainer) {
                         this.chatContainer.innerHTML = "";
                         const hint = document.createElement("div");
