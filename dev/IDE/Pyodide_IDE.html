@@ -2965,17 +2965,6 @@ await main_async_def()
             }
         });
 
-        // ローカルファイルを開く機能
-        async function input_file_button_click() {
-            const [file] = e.target.files;
-            if (file) {
-                const reader = new FileReader();
-                reader.addEventListener("load", () => {
-                    update_editor_with_content(file.name, reader.result, "Input File");
-                });
-                reader.readAsText(file);
-            }
-        };
 
         // アクティブタブから保存用コンテンツを取得（タブ無し時は null）
         function get_active_tab_save_content() {
@@ -9268,7 +9257,6 @@ sys.stderr = Web_Stdout()
             const toggle_sidebar_button = document.getElementById("toggle_sidebar");
             const toggle_ai_sidebar_button = document.getElementById("toggle_ai_sidebar");
             const drive_dir_button = document.getElementById("drive_dir");
-            const input_file_button = document.getElementById("input_script_file");
             const download_html_button = document.getElementById("download_html");
             const save_script_button = document.getElementById("save_script");
             const stop_script_button = document.getElementById("stop_script");
