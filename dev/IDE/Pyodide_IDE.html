@@ -10265,37 +10265,55 @@ sys.stderr = Web_Stdout()
 
             //-------------------------------------------------------- ### Web_Serial_API ###
             serial_connect_button.addEventListener("click", async () => { // con
-                // ボーレートは必要に応じてUIから取得するか固定値
-                // 例: modbus_address_elementの値をボーレートとして使う等の運用も可能ですが、一旦固定
-                const options = {
-                    baudRate: serial_baud_rate_element.value,
-                    dataBits: serial_data_bits_element.value,
-                    parity: serial_parity_element.value,
-                    stopBits: serial_stop_bits_element.value
-                };
-                await SPM.serial_connect(options);
-                // 接続成功をiframe(Python)に通知
-                frame.contentWindow.postMessage({
-                    cmd: "serial_status",
-                    status: "connected",
-                    msg: "Serial Port Connected"
-                }, "*");
-                alert(t("serialConnected"));
-                // disabled属性を削除
-                document.getElementById("send_modbus_btn_id").removeAttribute("disabled");
-                document.getElementById("send_modbus_btn_id").style.opacity = "0.5";
+                try {
+                    const options = {
+                        baudRate: parseInt(serial_baud_rate_element.value, 10) || 9600,
+                        dataBits: parseInt(serial_data_bits_element.value, 10) || 8,
+                        parity: serial_parity_element.value || "none",
+                        stopBits: parseInt(serial_stop_bits_element.value, 10) || 1
+                    };
+                    await SPM.serial_connect(options);
+                    
+                    // 接続成功時にアイコン状態を切り替える
+                    serial_connect_button.setAttribute("disabled", "true");
+                    serial_connect_button.style.opacity = "0.5";
+                    
+                    serial_cut_button.removeAttribute("disabled");
+                    serial_cut_button.style.opacity = "1.0";
+
+                    // 接続成功をiframe(Python)に通知
+                    frame.contentWindow.postMessage({
+                        cmd: "serial_status",
+                        status: "connected",
+                        msg: "Serial Port Connected"
+                    }, "*");
+                    alert(t("serialConnected"));
+                } catch (err) {
+                    console.error("Serial Connection Cancelled or Failed:", err);
+                }
             });
+
             serial_cut_button.addEventListener("click", async () => { // cut
-                await SPM.serial_disconnect();
-                // 切断をiframe(Python)に通知
-                frame.contentWindow.postMessage({
-                    cmd: "serial_status",
-                    status: "disconnected",
-                    msg: "Serial Port Disconnected"
-                }, "*");
-                alert(t("serialDisconnected"));
-                document.getElementById("send_modbus_btn_id").removeAttribute("disabled");
-                document.getElementById("send_modbus_btn_id").style.opacity = "1.0";
+                try {
+                    await SPM.serial_disconnect();
+                    
+                    // 切断時にアイコン状態を元に戻す
+                    serial_connect_button.removeAttribute("disabled");
+                    serial_connect_button.style.opacity = "1.0";
+
+                    serial_cut_button.setAttribute("disabled", "true");
+                    serial_cut_button.style.opacity = "0.5";
+
+                    // 切断をiframe(Python)に通知
+                    frame.contentWindow.postMessage({
+                        cmd: "serial_status",
+                        status: "disconnected",
+                        msg: "Serial Port Disconnected"
+                    }, "*");
+                    alert(t("serialDisconnected"));
+                } catch (err) {
+                    console.error("Serial Disconnect Failed:", err);
+                }
             });
 
             class Serial_port_manager {
