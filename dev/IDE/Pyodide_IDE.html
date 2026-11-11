@@ -10326,6 +10326,7 @@ sys.stderr = Web_Stdout()
                     this.last_temp = 400
                 }
 
+                /*
                 // ポート選択と接続
                 async serial_connect(options = { baudRate: 9600, dataBits: 8, parity: "none", stopBits: 1 }) {
                     if (!navigator.serial) throw new Error("Web Serial API not supported");
@@ -10333,6 +10334,28 @@ sys.stderr = Web_Stdout()
                     // ユーザーによるポート選択 (要ユーザージェスチャー)
                     this.port = await navigator.serial.requestPort();
                     await this.port.open(options);
+
+                    // 受信ループの開始
+                    this.keep_reading = true;
+                    this.read_promise = this.read_loop();
+                    return "Connected";
+                }
+                */
+
+                // ポート選択と接続
+                async serial_connect(options = { baudRate: 9600, dataBits: 8, parity: "none", stopBits: 1 }) {
+                    if (!navigator.serial) throw new Error("Web Serial API not supported");
+
+                    // ユーザーによるポート選択 (要ユーザージェスチャー)
+                    this.port = await navigator.serial.requestPort();
+                    await this.port.open(options);
+
+                    // DTRおよびRTS信号を有効化（通信許可・給電を確定させる）
+                    try {
+                        await this.port.setSignals({ dataTerminalReady: true, requestToSend: true });
+                    } catch (e) {
+                        console.warn("setSignals not supported or failed:", e);
+                    }
 
                     // 受信ループの開始
                     this.keep_reading = true;
