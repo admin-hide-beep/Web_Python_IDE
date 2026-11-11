@@ -10346,34 +10346,36 @@ sys.stderr = Web_Stdout()
                 async serial_connect(options = { baudRate: 9600, dataBits: 8, parity: "none", stopBits: 1 }) {
                     if (!navigator.serial) throw new Error("Web Serial API not supported");
 
-                    // ユーザーによるポート選択 (要ユーザージェスチャー)
                     this.port = await navigator.serial.requestPort();
                     await this.port.open(options);
 
-                    // DTRおよびRTS信号を有効化（通信許可・給電を確定させる）
+                    // 制御信号（給電・通信許可）の有効化
                     try {
                         await this.port.setSignals({ dataTerminalReady: true, requestToSend: true });
                     } catch (e) {
-                        console.warn("setSignals not supported or failed:", e);
+                        console.warn("setSignals failed:", e);
                     }
 
-                    // 受信ループの開始
+                    // Writer を接続時に1度だけ取得（毎回の releaseLock によるリセットを防ぐ）
+                    if (this.port.writable) {
+                        this.writer = this.port.writable.getWriter();
+                    }
+
                     this.keep_reading = true;
                     this.read_promise = this.read_loop();
                     return "Connected";
                 }
 
-                // 受信ループ (バックグラウンドで常に待機)
+                // 受信ループ (バックグラウンド待機)
                 async read_loop() {
                     while (this.port && this.port.readable && this.keep_reading) {
-                        this.reader = this.port.readable.getReader();
                         try {
-                            while (true) {
+                            this.reader = this.port.readable.getReader();
+                            while (this.keep_reading) {
                                 const { value, done } = await this.reader.read();
                                 if (done) break;
-                                if (value) {
-                                    // 受信した生データをそのままIframe (Python) へ転送
-                                    // postMessageはStructured Cloneに対応しているためUint8Arrayをそのまま送れる
+                                if (value && value.length > 0) {
+                                    // Iframe (Python) へ受信データを転送
                                     frame.contentWindow.postMessage({
                                         cmd: "serial_rx",
                                         data: value
@@ -10383,7 +10385,10 @@ sys.stderr = Web_Stdout()
                         } catch (error) {
                             console.error("Serial Read Error:", error);
                         } finally {
-                            this.reader.releaseLock();
+                            if (this.reader) {
+                                try { this.reader.releaseLock(); } catch(e){}
+                                this.reader = null;
+                            }
                         }
                     }
                 }
@@ -10392,7 +10397,11 @@ sys.stderr = Web_Stdout()
                 async serial_disconnect() {
                     this.keep_reading = false;
                     if (this.reader) {
-                        await this.reader.cancel();
+                        try { await this.reader.cancel(); } catch(e){}
+                    }
+                    if (this.writer) {
+                        try { this.writer.releaseLock(); } catch(e){}
+                        this.writer = null;
                     }
                     if (this.read_promise) {
                         await this.read_promise;
@@ -10404,19 +10413,23 @@ sys.stderr = Web_Stdout()
                     return "Disconnected";
                 }
 
-                // データ送信 (Pythonから受け取ったByte配列を書き込む)
+                // データ送信
                 async serial_write(data_array) {
-                    //if (!this.port || !this.port.writable) throw new Error("Port not writable");
-                    if (!this.port || !this.port.writable) {
-                        return this.dummy_response(data_array);
-                    }
+                    if (!this.port) return "Not Connected";
 
-                    const writer = this.port.writable.getWriter();
                     try {
-                        // Uint8Arrayとして書き込み
-                        await writer.write(new Uint8Array(data_array));
-                    } finally {
-                        writer.releaseLock();
+                        if (!this.writer && this.port.writable) {
+                            this.writer = this.port.writable.getWriter();
+                        }
+                        if (this.writer) {
+                            await this.writer.write(new Uint8Array(data_array));
+                        }
+                    } catch (e) {
+                        console.error("Serial Write Error:", e);
+                        if (this.writer) {
+                            try { this.writer.releaseLock(); } catch(err){}
+                            this.writer = null;
+                        }
                     }
                     return "Sent";
                 }
