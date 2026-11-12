@@ -1680,24 +1680,30 @@
 		}
 
 		/* ### Loading Overlay (ロード中画面) ### */
-		#loading_overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
+        #loading_overlay {
+            position: absolute;
+            inset: 0;
             width: 100%;
             height: 100%;
             background-color: rgba(12, 14, 18, 0.72);
-            z-index: 9999;
+            z-index: 100;
             display: none;
             justify-content: center;
             align-items: center;
             flex-direction: column;
+            text-align: center;
+            padding: 12px;
+            box-sizing: border-box;
             color: var(--text-primary);
             font-size: 1.05em;
             font-family: var(--font-ui);
             backdrop-filter: blur(2px);
-		}
-		.spinner {
+        }
+        #loading_overlay.fullscreen {
+            position: fixed;
+            z-index: 9999;
+        }
+        .spinner {
             border: 3px solid var(--border-strong);
             border-top: 3px solid var(--accent);
             border-radius: 50%;
@@ -1705,11 +1711,11 @@
             height: 42px;
             animation: spin 0.85s linear infinite;
             margin-bottom: 14px;
-		}
+        }
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
-		}
+        }
 
 		/* 言語選択オーバーレイ（新規タブ） */
 		#lang_select_overlay {
@@ -1743,10 +1749,6 @@
 
 	</head>
 	<body>
-    <div id="loading_overlay">
-		<div class="spinner"></div>
-		<div id="loading_text" data-i18n="loadingDefault">Loading...</div>
-    </div>
     <header>
 		<div id="buttons">
 			<input type="file" id="input_script_folder" webkitdirectory directory multiple style="display: none;">
@@ -1904,7 +1906,12 @@
 		<div id="sidebar_resizer_v"></div>
 		<div id="main_content">
 			<div id="tab_bar_container"></div>
-			<div id="editor"></div>
+			<div id="editor">
+                <div id="loading_overlay">
+                    <div class="spinner"></div>
+                    <div id="loading_text" data-i18n="loadingDefault">Loading...</div>
+                </div>
+            </div>
 			<div id="plot_container"></div>
 			<div id="preview_container">
 				<iframe
@@ -3034,16 +3041,27 @@ await main_async_def()
         });
 
         //-------------------------------------------------------- ### Loading_制御関数 ###
-        function toggle_loading(is_loading, text = t("loadingDefault")) {
+        function toggle_loading(is_loading, text = t("loadingDefault"), scope = "global") {
             const overlay = document.getElementById("loading_overlay");
             const msg_el = document.getElementById("loading_text");
 
-            if (msg_el) msg_el.textContent = text;
+            if (msg_el) {
+                msg_el.textContent = text;
+            }
+            if (!overlay) {
+                return;
+            }
 
             if (is_loading) {
+                if (scope === "editor") {
+                    overlay.classList.remove("fullscreen");
+                } else {
+                    overlay.classList.add("fullscreen");
+                }
                 overlay.style.display = "flex";
             } else {
                 overlay.style.display = "none";
+                overlay.classList.remove("fullscreen");
             }
         }
 
@@ -8122,17 +8140,19 @@ if os.path.exists("${MOUNT_PATH}"):
                     }
                     return;
 
-                } else if (lang_id === "python") {  // --- pythonの場合 ---
-                    if (stop_watchdog_timer) {// もし強制停止タイマーが待機中なら、新しい実行が始まったのでキャンセルする
+                } else if (lang_id === "python") { // --- pythonの場合 ---
+                    if (stop_watchdog_timer) { // もし強制停止タイマーが待機中なら、新しい実行が始まったのでキャンセルする
                         clearTimeout(stop_watchdog_timer);
                         stop_watchdog_timer = null;
                     }
                     interrupt_buffer[0] = 0;
                     js_result_area_element.value = "# Python_Script_Running... #"; // ステータスを「Running」に更新
-                    py_result_area_element.value = ""
-                    toggle_loading(true, "Running Script..."); // ローディング表示開始
+                    py_result_area_element.value = "";
+                    toggle_loading(true, "Running Script...", "editor"); // エディター部のみローディング表示開始
                     set_sidebar_buttons_state(false);
-                    if (interrupt_buffer) interrupt_buffer[0] = 0; // 実行前に割り込みバッファをクリア (0にする)
+                    if (interrupt_buffer) {
+                        interrupt_buffer[0] = 0; // 実行前に割り込みバッファをクリア (0にする)
+                    }
 
                     // 自動sleep注入処理
                     // ユーザーに処理内容を通知（オプション）
